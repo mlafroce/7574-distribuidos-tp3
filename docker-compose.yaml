@@ -1,0 +1,197 @@
+version: "3.2"
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    logging:
+      driver: none
+
+  rabbit-scripts:
+    image: rabbit-scripts:latest
+    build:
+      context: .
+      dockerfile: docker/db.Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  results_consumer:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: results_consumer
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OUTPUT_PATH=/var/data/output.txt
+    volumes:
+      - ${PWD}/data/output.txt:/var/data/output.txt
+
+  post_producer:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      rabbit-scripts:
+        condition: service_completed_successfully
+    command: post_producer
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - POSTS_FILE=/var/data/the-reddit-irl-dataset-posts.csv
+    volumes:
+      - ${PWD}/data/the-reddit-irl-dataset-posts.csv:/var/data/the-reddit-irl-dataset-posts.csv
+
+  comment_producer:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      rabbit-scripts:
+        condition: service_completed_successfully
+    command: comment_producer
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - COMMENTS_FILE=/var/data/the-reddit-irl-dataset-comments.csv
+      - CONSUMERS=2
+    volumes:
+      - ${PWD}/data/the-reddit-irl-dataset-comments.csv:/var/data/the-reddit-irl-dataset-comments.csv
+
+  best_meme_filter:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: best_meme_filter
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  comment_college_filter:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: comment_college_filter
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  comment_sentiment_extractor:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - comment_producer
+    command: comment_sentiment_extractor
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  comment_sentiment_extractor_2:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - comment_producer
+    command: comment_sentiment_extractor
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  mean_calculator:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: mean_calculator
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  post_average_filter:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: post_average_filter
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  post_college_filter:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - comment_college_filter
+    command: post_college_filter
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  post_sentiment_calculator:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: post_sentiment_calculator
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  post_sentiment_filter:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - comment_sentiment_extractor
+    command: post_sentiment_filter
+    environment:
+      - PRODUCERS=2
+      - RABBITMQ_HOST=rabbitmq
+
+  score_extractor:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: score_extractor
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+
+  url_extractor:
+    image: memes-nodes:latest
+    build:
+      context: .
+      dockerfile: docker/nodes.Dockerfile
+    depends_on:
+      - post_producer
+      - comment_producer
+    command: url_extractor
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - CONSUMERS=2
