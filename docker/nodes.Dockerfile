@@ -1,14 +1,11 @@
-FROM rust:latest AS builder
+FROM rust AS builder
 LABEL intermediateStageToBeDeleted=true
 
 COPY src build/src
 COPY Cargo.toml Cargo.lock build/
 RUN cd build && cargo build --release
 
-FROM ubuntu:latest
-
-RUN apt update &&\
-  apt install -y libssl1.1
+FROM rust
 
 COPY --from=builder /build/target/release/best_meme_filter /usr/bin/
 COPY --from=builder /build/target/release/comment_college_filter /usr/bin/
