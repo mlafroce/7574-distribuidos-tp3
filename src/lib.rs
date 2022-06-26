@@ -69,3 +69,5 @@ pub const COMMENT_COLLEGE_QUEUE_NAME: &str = "tp2.comments.college_src";
 pub const POST_ID_COLLEGE_QUEUE_NAME: &str = "tp2.posts.college_id";
 /// Results queue
 pub const RESULTS_QUEUE_NAME: &str = "tp2.results";
+/// Queue with data to save
+pub const DATA_TO_SAVE_QUEUE_NAME: &str = "tp2.data.save";

@@ -26,6 +26,7 @@ rabbitmqadmin -H rabbitmq declare queue auto_delete=false durable=false name=tp2
 rabbitmqadmin -H rabbitmq declare queue auto_delete=false durable=false name=tp2.comments.sentiment_src
 rabbitmqadmin -H rabbitmq declare queue auto_delete=false durable=false name=tp2.comments.college_src
 rabbitmqadmin -H rabbitmq declare queue auto_delete=false durable=false name=tp2.results
+rabbitmqadmin -H rabbitmq declare queue auto_delete=false durable=false name=tp2.data.save
 rabbitmqadmin -H rabbitmq declare exchange type=fanout name=tp2.posts
 rabbitmqadmin -H rabbitmq declare exchange type=fanout name=tp2.comments
 

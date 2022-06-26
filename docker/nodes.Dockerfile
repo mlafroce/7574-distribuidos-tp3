@@ -20,4 +20,6 @@ COPY --from=builder /build/target/release/post_sentiment_filter /usr/bin/
 COPY --from=builder /build/target/release/results_consumer /usr/bin/
 COPY --from=builder /build/target/release/score_extractor /usr/bin/
 COPY --from=builder /build/target/release/url_extractor /usr/bin/
+COPY --from=builder /build/target/release/saver /usr/bin/
+
 
