@@ -2,9 +2,9 @@ use amiquip::Result;
 use log::warn;
 use std::collections::HashMap;
 use tp2::connection::BinaryExchange;
-use tp2::messages::Message;
+use tp2::messages::{Message, PostSentiment};
 use tp2::service::{init, RabbitService};
-use tp2::{Config, FILTERED_POST_ID_SENTIMENT_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME};
+use tp2::{Config, FILTERED_POST_ID_SENTIMENT_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME, DATA_TO_SAVE_QUEUE_NAME, post};
 
 fn main() -> Result<()> {
     let config = init();
@@ -17,12 +17,22 @@ struct PostSentimentCalculator {
 }
 
 impl RabbitService for PostSentimentCalculator {
-    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
+    fn process_message(&mut self, message: Message, exchange: &BinaryExchange) -> Result<()> {
         match message {
             Message::PostIdSentiment(post_id, sentiment) => {
-                let value = self.post_sentiments_map.entry(post_id).or_insert((0.0, 0));
+                let value = self.post_sentiments_map.entry(post_id.to_string()).or_insert((0.0, 0));
                 value.0 += sentiment;
                 value.1 += 1;
+
+                /* Persist State */
+                let msg =
+                    Message::DataPostSentiment(PostSentiment{
+                        post_id: post_id,
+                        sentiment: value.0,
+                        count: value.1
+                    });
+                exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+                /* */
             }
             _ => {
                 warn!("Invalid message arrived");

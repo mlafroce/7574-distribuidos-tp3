@@ -2,6 +2,7 @@ use amiquip::Result;
 use log::{info, warn};
 use tp2::connection::BinaryExchange;
 use tp2::messages::Message;
+use tp2::messages::CurrentStore;
 use tp2::service::{init, RabbitService};
 use tp2::{
     Config, DATA_TO_SAVE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME,
@@ -33,11 +34,11 @@ impl RabbitService for MeanCalculator {
 
                 /* Persist State */
                 let msg_score_count =
-                    Message::DataToSave("score_count".to_string(), self.score_count.to_string());
-                let msg_score_sum =
-                    Message::DataToSave("score_sum".to_string(), self.score_sum.to_string());
+                    Message::DataCurrentScore(CurrentStore {
+                        sum: self.score_sum,
+                        count: self.score_count  
+                     });
                 exchange.send_with_key(&msg_score_count, DATA_TO_SAVE_QUEUE_NAME)?;
-                exchange.send_with_key(&msg_score_sum, DATA_TO_SAVE_QUEUE_NAME)?;
                 /*  */
             }
             _ => {
