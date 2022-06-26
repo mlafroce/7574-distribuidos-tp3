@@ -3,7 +3,10 @@ use log::{info, warn};
 use tp2::connection::BinaryExchange;
 use tp2::messages::Message;
 use tp2::service::{init, RabbitService};
-use tp2::{Config, POST_SCORE_AVERAGE_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME, RESULTS_QUEUE_NAME};
+use tp2::{
+    Config, DATA_TO_SAVE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME,
+    RESULTS_QUEUE_NAME,
+};
 
 fn main() -> Result<()> {
     let env_config = init();
@@ -22,11 +25,20 @@ struct MeanCalculator {
 }
 
 impl RabbitService for MeanCalculator {
-    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
+    fn process_message(&mut self, message: Message, exchange: &BinaryExchange) -> Result<()> {
         match message {
             Message::PostScore(score) => {
                 self.score_count += 1;
                 self.score_sum += score;
+
+                /* Persist State */
+                let msg_score_count =
+                    Message::DataToSave("score_count".to_string(), self.score_count.to_string());
+                let msg_score_sum =
+                    Message::DataToSave("score_sum".to_string(), self.score_sum.to_string());
+                exchange.send_with_key(&msg_score_count, DATA_TO_SAVE_QUEUE_NAME)?;
+                exchange.send_with_key(&msg_score_sum, DATA_TO_SAVE_QUEUE_NAME)?;
+                /*  */
             }
             _ => {
                 warn!("Invalid message arrived");

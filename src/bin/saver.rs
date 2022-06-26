@@ -1,16 +1,20 @@
+use std::collections::HashMap;
+
 use amiquip::Result;
 use tp2::connection::BinaryExchange;
 use tp2::messages::Message;
 use tp2::service::{init, RabbitService};
 use tp2::{Config, DATA_TO_SAVE_QUEUE_NAME};
 
-struct Saver;
+struct Saver {
+    data: HashMap<String, String>
+}
 
 impl RabbitService for Saver {
-    fn process_message(&mut self, message: Message, bin_exchange: &BinaryExchange) -> Result<()> {
+    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
         match message {
-            Message::DataToSave(data) => {
-                println!("hola")
+            Message::DataToSave(key, value) => {
+                self.data.insert(key, value);
             }
             _ => {}
         }
@@ -24,7 +28,11 @@ fn main() -> Result<()> {
 }
 
 fn run_service(config: Config) -> Result<()> {
-    let mut service = Saver;
+
+    let mut service = Saver {
+        data: HashMap::new()
+    };
+
     service.run(
         config,
         DATA_TO_SAVE_QUEUE_NAME,
