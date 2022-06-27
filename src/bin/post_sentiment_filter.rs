@@ -3,12 +3,12 @@ use envconfig::Envconfig;
 use log::{info, warn};
 use std::collections::HashSet;
 use tp2::messages::Message;
+use tp2::middleware::service::RabbitService;
+use tp2::middleware::RabbitExchange;
 use tp2::{
     Config, FILTERED_POST_ID_SENTIMENT_QUEUE_NAME, POST_ID_SENTIMENT_QUEUE_NAME,
     POST_ID_WITH_URL_QUEUE_NAME,
 };
-use tp2::connection::BinaryExchange;
-use tp2::service::RabbitService;
 
 fn main() -> Result<()> {
     let env_config = Config::init_from_env().unwrap();
@@ -30,13 +30,16 @@ fn run_service(config: Config) -> Result<()> {
     )
 }
 
-
 struct PostSentimentFilter {
-    ids: HashSet<String>
+    ids: HashSet<String>,
 }
 
 impl RabbitService for PostSentimentFilter {
-    fn process_message(&mut self, message: Message, bin_exchange: &BinaryExchange) -> Result<()> {
+    fn process_message<E: RabbitExchange>(
+        &mut self,
+        message: Message,
+        bin_exchange: &mut E,
+    ) -> Result<()> {
         match message {
             Message::PostIdSentiment(post_id, sentiment) => {
                 if self.ids.contains(&post_id) {
@@ -58,7 +61,7 @@ struct PostIdWithUrlConsumer {
 }
 
 impl RabbitService for PostIdWithUrlConsumer {
-    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
+    fn process_message<E: RabbitExchange>(&mut self, message: Message, _: &mut E) -> Result<()> {
         match message {
             Message::PostId(id) => {
                 self.ids.insert(id);
@@ -74,10 +77,6 @@ impl RabbitService for PostIdWithUrlConsumer {
 fn get_posts_ids_with_url(config: &Config) -> Result<HashSet<String>> {
     let config = config.clone();
     let mut service = PostIdWithUrlConsumer::default();
-    service.run(
-        config,
-        POST_ID_WITH_URL_QUEUE_NAME,
-        None,
-    )?;
+    service.run(config, POST_ID_WITH_URL_QUEUE_NAME, None)?;
     Ok(service.ids)
 }

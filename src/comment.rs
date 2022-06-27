@@ -8,7 +8,7 @@ use std::fs::File;
 const COLLEGE_WORDS: &str = "university|college|student|teacher|professor";
 const URL_PATTERN: &str = "https://old.reddit.com/r/meirl/comments/([^/]+)/meirl/.*";
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Comment {
     id: String,
     subreddit_id: String,

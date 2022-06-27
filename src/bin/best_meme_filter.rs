@@ -1,8 +1,9 @@
 use amiquip::{ConsumerMessage, Result};
 use log::{debug, error, info, warn};
-use tp2::connection::{BinaryExchange, RabbitConnection};
 use tp2::messages::Message;
-use tp2::service::{init, RabbitService};
+use tp2::middleware::connection::RabbitConnection;
+use tp2::middleware::service::{init, RabbitService};
+use tp2::middleware::RabbitExchange;
 use tp2::{
     Config, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME, RESULTS_QUEUE_NAME,
 };
@@ -17,11 +18,7 @@ fn run_service(config: Config) -> Result<()> {
     let best_meme_id = get_best_meme_id(&config)?;
     info!("Getting best meme");
     let mut service = BestMemeFilter::new(best_meme_id);
-    service.run(
-        config,
-        POST_EXTRACTED_URL_QUEUE_NAME,
-        None,
-    )
+    service.run(config, POST_EXTRACTED_URL_QUEUE_NAME, None)
 }
 
 struct BestMemeFilter {
@@ -39,7 +36,7 @@ impl BestMemeFilter {
 }
 
 impl RabbitService for BestMemeFilter {
-    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
+    fn process_message<E: RabbitExchange>(&mut self, message: Message, _: &mut E) -> Result<()> {
         match message {
             Message::PostUrl(id, url) => {
                 if id == self.best_meme_id {
@@ -54,7 +51,7 @@ impl RabbitService for BestMemeFilter {
         Ok(())
     }
 
-    fn on_stream_finished(&self, exchange: &BinaryExchange) -> Result<()> {
+    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
         debug!("Sending best meme url: {}", self.meme_url);
         let message = Message::PostUrl(self.best_meme_id.clone(), self.meme_url.clone());
         exchange.send_with_key(&message, RESULTS_QUEUE_NAME)

@@ -1,9 +1,9 @@
 use amiquip::Result;
 use log::warn;
 use std::collections::HashMap;
-use tp2::connection::BinaryExchange;
 use tp2::messages::Message;
-use tp2::service::{init, RabbitService};
+use tp2::middleware::service::{init, RabbitService};
+use tp2::middleware::RabbitExchange;
 use tp2::{Config, FILTERED_POST_ID_SENTIMENT_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME};
 
 fn main() -> Result<()> {
@@ -17,7 +17,7 @@ struct PostSentimentCalculator {
 }
 
 impl RabbitService for PostSentimentCalculator {
-    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
+    fn process_message<E: RabbitExchange>(&mut self, message: Message, _: &mut E) -> Result<()> {
         match message {
             Message::PostIdSentiment(post_id, sentiment) => {
                 let value = self.post_sentiments_map.entry(post_id).or_insert((0.0, 0));
@@ -31,7 +31,7 @@ impl RabbitService for PostSentimentCalculator {
         Ok(())
     }
 
-    fn on_stream_finished(&self, bin_exchange: &BinaryExchange) -> Result<()> {
+    fn on_stream_finished<E: RabbitExchange>(&self, bin_exchange: &mut E) -> Result<()> {
         let post_sentiment = get_highest_post_sentiment(&self.post_sentiments_map);
         let msg = Message::PostIdSentiment(post_sentiment.0, post_sentiment.1);
         bin_exchange.send_with_key(&msg, POST_SENTIMENT_MEAN_QUEUE_NAME)

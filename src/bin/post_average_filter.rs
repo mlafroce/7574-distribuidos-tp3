@@ -1,11 +1,15 @@
-use std::sync::atomic::Ordering;
 use amiquip::{ConsumerMessage, Result};
 use envconfig::Envconfig;
 use log::{error, info, warn};
-use tp2::connection::{BinaryExchange, RabbitConnection};
+use std::sync::atomic::Ordering;
 use tp2::messages::Message;
-use tp2::service::{RabbitService, TERM_FLAG};
-use tp2::{Config, POST_COLLEGE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME, RECV_TIMEOUT};
+use tp2::middleware::connection::RabbitConnection;
+use tp2::middleware::service::{RabbitService, TERM_FLAG};
+use tp2::middleware::RabbitExchange;
+use tp2::{
+    Config, POST_COLLEGE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME,
+    RECV_TIMEOUT,
+};
 
 fn main() -> Result<()> {
     let env_config = Config::init_from_env().unwrap();
@@ -36,7 +40,11 @@ struct PostAverageFilter {
 }
 
 impl RabbitService for PostAverageFilter {
-    fn process_message(&mut self, message: Message, exchange: &BinaryExchange) -> Result<()> {
+    fn process_message<E: RabbitExchange>(
+        &mut self,
+        message: Message,
+        exchange: &mut E,
+    ) -> Result<()> {
         match message {
             Message::FullPost(post) => {
                 if post.score as f32 > self.score_average && post.url.starts_with("https") {
@@ -66,7 +74,7 @@ fn get_score_average(config: &Config) -> Result<Option<f32>> {
                     Ok(Message::PostScoreMean(mean)) => {
                         consumer.ack(delivery)?;
                         result = Some(mean);
-                        break
+                        break;
                     }
                     _ => {
                         error!("Invalid message arrived");

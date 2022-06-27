@@ -2,7 +2,7 @@ use csv::{Reader, ReaderBuilder, StringRecord};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Post {
     pub id: String,
     subreddit_id: String,

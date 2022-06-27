@@ -2,7 +2,7 @@ use crate::comment::Comment;
 use crate::post::Post;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Message {
     EndOfStream,
     FullPost(Post),
@@ -13,5 +13,6 @@ pub enum Message {
     PostUrl(String, String),
     PostIdSentiment(String, f32),
     CollegePostUrl(String),
-    DataToSave(String, String)
+    DataToSave(String, String),
+    BulkMessage(Vec<u8>, Vec<usize>),
 }

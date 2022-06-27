@@ -1,10 +1,12 @@
 use amiquip::{ExchangeType, Publish, Result};
 use log::{debug, info};
 use tp2::comment::CommentIterator;
-use tp2::connection::RabbitConnection;
 use tp2::messages::Message;
-use tp2::service::init;
+use tp2::middleware::connection::{BinaryExchange, RabbitConnection};
+use tp2::middleware::service::init;
 use tp2::{Config, COMMENTS_SOURCE_EXCHANGE_NAME};
+use tp2::middleware::buf_exchange::BufExchange;
+use tp2::middleware::RabbitExchange;
 
 fn main() -> Result<()> {
     let env_config = init();
@@ -19,25 +21,22 @@ fn main() -> Result<()> {
 
 fn run_service(config: Config, comments_file: String) -> Result<()> {
     let connection = RabbitConnection::new(&config)?;
-    let exchange =
-        connection.get_named_exchange(COMMENTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
-    let comments = CommentIterator::from_file(&comments_file);
-    info!("Iterating comments");
-    let published = comments
-        .map(Message::FullComment)
-        .flat_map(|message| {
-            debug!("Publishing {:?}", message);
-            bincode::serialize(&message)
-        })
-        .flat_map(|data| exchange.publish(Publish::new(&data, "")))
-        .count();
-
-    info!("Published {} comments", published);
-
     let consumers = str::parse::<usize>(&config.consumers).unwrap();
-    for _ in 0..consumers {
-        let data = bincode::serialize(&Message::EndOfStream).unwrap();
-        exchange.publish(Publish::new(&data, ""))?;
+    {
+        let exchange =
+            connection.get_named_exchange(COMMENTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
+        let bin_exchange = BinaryExchange::new(exchange, None, 1, consumers);
+        let mut exchange = BufExchange::new(bin_exchange, connection.get_channel(), None);
+        let comments = CommentIterator::from_file(&comments_file);
+        info!("Iterating comments");
+        let published = comments
+            .map(Message::FullComment)
+            .flat_map(|message| exchange.send(&message))
+            .count();
+
+        exchange.end_of_stream()?;
+
+        info!("Published {} comments", published);
     }
     info!("Exit");
     connection.close()

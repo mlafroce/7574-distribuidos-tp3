@@ -1,8 +1,8 @@
 use amiquip::Result;
 use log::{info, warn};
-use tp2::connection::BinaryExchange;
 use tp2::messages::Message;
-use tp2::service::{init, RabbitService};
+use tp2::middleware::service::{init, RabbitService};
+use tp2::middleware::RabbitExchange;
 use tp2::{
     Config, DATA_TO_SAVE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME,
     RESULTS_QUEUE_NAME,
@@ -25,7 +25,11 @@ struct MeanCalculator {
 }
 
 impl RabbitService for MeanCalculator {
-    fn process_message(&mut self, message: Message, exchange: &BinaryExchange) -> Result<()> {
+    fn process_message<E: RabbitExchange>(
+        &mut self,
+        message: Message,
+        exchange: &mut E,
+    ) -> Result<()> {
         match message {
             Message::PostScore(score) => {
                 self.score_count += 1;
@@ -47,7 +51,7 @@ impl RabbitService for MeanCalculator {
         Ok(())
     }
 
-    fn on_stream_finished(&self, exchange: &BinaryExchange) -> Result<()> {
+    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
         let mean = self.score_sum as f32 / self.score_count as f32;
         info!("End of stream received, sending mean: {}", mean);
         let msg = Message::PostScoreMean(mean);

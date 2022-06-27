@@ -1,8 +1,8 @@
 use amiquip::Result;
 use log::warn;
-use tp2::connection::BinaryExchange;
 use tp2::messages::Message;
-use tp2::service::{init, RabbitService};
+use tp2::middleware::service::{init, RabbitService};
+use tp2::middleware::RabbitExchange;
 use tp2::{Config, POST_SCORES_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME};
 
 fn main() -> Result<()> {
@@ -13,7 +13,11 @@ fn main() -> Result<()> {
 struct ScoreExtractor;
 
 impl RabbitService for ScoreExtractor {
-    fn process_message(&mut self, message: Message, bin_exchange: &BinaryExchange) -> Result<()> {
+    fn process_message<E: RabbitExchange>(
+        &mut self,
+        message: Message,
+        bin_exchange: &mut E,
+    ) -> Result<()> {
         match message {
             Message::FullPost(post) => {
                 let score = Message::PostScore(post.score);

@@ -1,8 +1,10 @@
-use amiquip::{ExchangeType, Publish, Result};
+use amiquip::{ExchangeType, Result};
 use envconfig::Envconfig;
 use log::info;
-use tp2::connection::RabbitConnection;
 use tp2::messages::Message;
+use tp2::middleware::buf_exchange::BufExchange;
+use tp2::middleware::connection::{BinaryExchange, RabbitConnection};
+use tp2::middleware::RabbitExchange;
 use tp2::post::PostIterator;
 use tp2::{Config, POSTS_SOURCE_EXCHANGE_NAME};
 
@@ -17,23 +19,23 @@ fn main() -> Result<()> {
 
 fn run_service(config: Config, posts_file: String) -> Result<()> {
     let connection = RabbitConnection::new(&config)?;
-    let exchange =
-        connection.get_named_exchange(POSTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
-    let posts = PostIterator::from_file(&posts_file);
-    info!("Iterating posts");
-    let published = posts
-        .map(Message::FullPost)
-        .flat_map(|message| bincode::serialize(&message))
-        .flat_map(|data| exchange.publish(Publish::new(&data, "")))
-        .count();
+    {
+        let consumers = str::parse::<usize>(&config.consumers).unwrap();
+        let exchange =
+            connection.get_named_exchange(POSTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
+        let bin_exchange = BinaryExchange::new(exchange, None, 1, consumers);
+        let mut exchange = BufExchange::new(bin_exchange, connection.get_channel(), None);
+        let posts = PostIterator::from_file(&posts_file);
+        info!("Iterating posts");
+        let published = posts
+            .map(Message::FullPost)
+            .flat_map(|message| exchange.send(&message))
+            .count();
 
-    info!("Published {} posts", published);
+        exchange.end_of_stream()?;
 
-    let consumers = str::parse::<usize>(&config.consumers).unwrap();
-    for _ in 0..consumers {
-        let data = bincode::serialize(&Message::EndOfStream).unwrap();
-        exchange.publish(Publish::new(&data, ""))?;
+        info!("Published {} posts", published);
+        info!("Exit");
     }
-    info!("Exit");
     connection.close()
 }

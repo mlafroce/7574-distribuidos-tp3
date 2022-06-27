@@ -1,10 +1,11 @@
 use crate::messages::Message;
+use crate::middleware::RabbitExchange;
 use crate::Config;
 use amiquip::{
     Channel, Connection, Consumer, ConsumerOptions, Exchange, ExchangeDeclareOptions, ExchangeType,
     Publish, QueueDeclareOptions, Result,
 };
-use log::{debug, error};
+use log::{debug, error, info};
 use std::cmp::Ordering;
 
 pub struct RabbitConnection {
@@ -49,6 +50,10 @@ impl RabbitConnection {
             .exchange_declare(type_, exchange, exchange_options)
     }
 
+    pub fn get_channel(&self) -> &Channel {
+        &self.channel
+    }
+
     pub fn close(self) -> Result<()> {
         self.connection.close()
     }
@@ -82,15 +87,17 @@ impl<'a> BinaryExchange<'a> {
             eos_message,
         }
     }
+}
 
-    pub fn send<T>(&self, message: &T) -> Result<()>
+impl RabbitExchange for BinaryExchange<'_> {
+    fn send<T>(&mut self, message: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
-        self.send_with_key(message, &self.output_key)
+        self.send_with_key(message, &self.output_key.clone())
     }
 
-    pub fn send_with_key<T>(&self, message: &T, key: &str) -> Result<()>
+    fn send_with_key<T>(&mut self, message: &T, key: &str) -> Result<()>
     where
         T: serde::Serialize,
     {
@@ -100,7 +107,8 @@ impl<'a> BinaryExchange<'a> {
 
     /// Call when an end of stream arrives. If no producers are left, notify consumers about EOS
     /// Returns true if finished, false otherwise
-    pub fn producer_ended(&mut self) -> Result<bool> {
+    fn end_of_stream(&mut self) -> Result<bool> {
+        info!("Called end_of_stream with {} producers, {} consumers", self.producers, self.consumers);
         match self.finished_producers.cmp(&(self.producers - 1)) {
             Ordering::Less => {
                 self.finished_producers += 1;
@@ -109,7 +117,7 @@ impl<'a> BinaryExchange<'a> {
             Ordering::Equal => {
                 self.finished_producers += 1;
                 for _ in 0..self.consumers {
-                    self.send(&self.eos_message)?;
+                    self.send(&self.eos_message.clone())?;
                 }
                 Ok(true)
             }

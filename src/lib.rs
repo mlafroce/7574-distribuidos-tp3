@@ -2,10 +2,9 @@ use envconfig::Envconfig;
 use std::time::Duration;
 
 pub mod comment;
-pub mod connection;
 pub mod messages;
+pub mod middleware;
 pub mod post;
-pub mod service;
 
 #[derive(Clone, Envconfig)]
 pub struct Config {
