@@ -1,5 +1,5 @@
-use amiquip::{ExchangeType, Publish, Result};
-use log::{debug, info};
+use amiquip::{ExchangeType, Result};
+use log::info;
 use tp2::comment::CommentIterator;
 use tp2::messages::Message;
 use tp2::middleware::connection::{BinaryExchange, RabbitConnection};

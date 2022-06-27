@@ -27,7 +27,7 @@ impl RabbitService for UrlExtractor {
                 if post.url.starts_with("http") {
                     let score = Message::PostUrl(post.id.clone(), post.url.clone());
                     exchange.send_with_key(&score, POST_EXTRACTED_URL_QUEUE_NAME)?;
-                    let id = Message::PostId(post.id.clone());
+                    let id = Message::PostId(post.id);
                     exchange.send_with_key(&id, POST_ID_WITH_URL_QUEUE_NAME)?;
                 }
             }

@@ -1,11 +1,12 @@
 use amiquip::{ConsumerMessage, Result};
 use log::{debug, error, info, warn};
-use tp2::messages::Message;
 use tp2::middleware::connection::RabbitConnection;
 use tp2::middleware::service::{init, RabbitService};
 use tp2::middleware::RabbitExchange;
+use tp2::messages::{BestMeme, Message};
 use tp2::{
-    Config, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME, RESULTS_QUEUE_NAME,
+    Config, DATA_TO_SAVE_QUEUE_NAME, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME,
+    RESULTS_QUEUE_NAME,
 };
 
 fn main() -> Result<()> {
@@ -23,25 +24,33 @@ fn run_service(config: Config) -> Result<()> {
 
 struct BestMemeFilter {
     best_meme_id: String,
-    meme_url: String,
+    best_meme_url: String,
 }
 
 impl BestMemeFilter {
     pub fn new(best_meme_id: String) -> Self {
         Self {
             best_meme_id,
-            meme_url: "".to_string(),
+            best_meme_url: "".to_string(),
         }
     }
 }
 
 impl RabbitService for BestMemeFilter {
-    fn process_message<E: RabbitExchange>(&mut self, message: Message, _: &mut E) -> Result<()> {
+    fn process_message<E: RabbitExchange>(&mut self, message: Message, exchange: &mut E) -> Result<()> {
         match message {
             Message::PostUrl(id, url) => {
                 if id == self.best_meme_id {
                     info!("Best meme with url: {:?} {:?}", id, url);
-                    self.meme_url = url;
+                    self.best_meme_url = url;
+
+                    /* Persist State */
+                    let msg = Message::DataBestMeme(BestMeme {
+                        id: self.best_meme_id.to_string(),
+                        url: self.best_meme_url.to_string(),
+                    });
+                    exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+                    /* */
                 }
             }
             _ => {
@@ -52,9 +61,14 @@ impl RabbitService for BestMemeFilter {
     }
 
     fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
-        debug!("Sending best meme url: {}", self.meme_url);
-        let message = Message::PostUrl(self.best_meme_id.clone(), self.meme_url.clone());
-        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)
+        debug!("Sending best meme url: {}", self.best_meme_url);
+        let message = Message::PostUrl(self.best_meme_id.clone(), self.best_meme_url.clone());
+        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)?;
+
+        /* Reset State Persisted */
+        let msg = Message::DataReset("best_meme_filter".to_string());
+        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)
+        /* */
     }
 }
 

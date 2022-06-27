@@ -42,7 +42,7 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
     // Query results
     let mut count = 0;
     let mut results = Results::default();
-    let mut data_received = (false, true, false);
+    let mut data_received = (false, false, false);
     let consumer = queue.consume(ConsumerOptions::default())?;
     let mut buf_consumer = BufConsumer::new(consumer);
     info!("Starting iteration");

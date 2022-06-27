@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use tp2::messages::Message;
 use tp2::middleware::service::{init, RabbitService};
 use tp2::middleware::RabbitExchange;
-use tp2::{Config, POST_ID_COLLEGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME, RESULTS_QUEUE_NAME};
+use tp2::{Config, POST_ID_COLLEGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME, RESULTS_QUEUE_NAME, DATA_TO_SAVE_QUEUE_NAME};
 
 fn main() -> Result<()> {
     let env_config = init();
@@ -46,6 +46,14 @@ impl RabbitService for PostCollegeFilter {
         }
         Ok(())
     }
+
+    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
+        /* Persist Reset */
+        let msg = Message::DataReset("post_college_filter".to_string());
+        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+        /* */
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -54,10 +62,14 @@ struct CollegePostIdConsumer {
 }
 
 impl RabbitService for CollegePostIdConsumer {
-    fn process_message<E: RabbitExchange>(&mut self, message: Message, _: &mut E) -> Result<()> {
+    fn process_message<E: RabbitExchange>(&mut self, message: Message, exchange: &mut E) -> Result<()> {
         match message {
             Message::PostId(id) => {
-                self.ids.insert(id);
+                self.ids.insert(id.clone());
+                /* Persist State */
+                let msg = Message::DataPostIdCollege(id);
+                exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+                /* */
             }
             _ => {
                 warn!("Invalid message arrived");

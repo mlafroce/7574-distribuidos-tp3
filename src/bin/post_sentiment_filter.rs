@@ -7,7 +7,7 @@ use tp2::middleware::service::RabbitService;
 use tp2::middleware::RabbitExchange;
 use tp2::{
     Config, FILTERED_POST_ID_SENTIMENT_QUEUE_NAME, POST_ID_SENTIMENT_QUEUE_NAME,
-    POST_ID_WITH_URL_QUEUE_NAME,
+    POST_ID_WITH_URL_QUEUE_NAME, DATA_TO_SAVE_QUEUE_NAME,
 };
 
 fn main() -> Result<()> {
@@ -53,6 +53,14 @@ impl RabbitService for PostSentimentFilter {
         }
         Ok(())
     }
+
+    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
+        /* Persist Reset */
+        let msg = Message::DataReset("post_sentiment_filter".to_string());
+        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+        /* */
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -61,10 +69,14 @@ struct PostIdWithUrlConsumer {
 }
 
 impl RabbitService for PostIdWithUrlConsumer {
-    fn process_message<E: RabbitExchange>(&mut self, message: Message, _: &mut E) -> Result<()> {
+    fn process_message<E: RabbitExchange>(&mut self, message: Message, exchange: &mut E) -> Result<()> {
         match message {
             Message::PostId(id) => {
-                self.ids.insert(id);
+                self.ids.insert(id.clone());
+                /* Persist State */
+                let msg = Message::PostId(id);
+                exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+                /* */
             }
             _ => {
                 warn!("Invalid message arrived");
