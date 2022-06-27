@@ -1,10 +1,11 @@
 use amiquip::{ConsumerMessage, Result};
 use log::{debug, error, info, warn};
 use tp2::connection::{BinaryExchange, RabbitConnection};
-use tp2::messages::Message;
+use tp2::messages::{BestMeme, Message};
 use tp2::service::{init, RabbitService};
 use tp2::{
-    Config, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME, RESULTS_QUEUE_NAME,
+    Config, DATA_TO_SAVE_QUEUE_NAME, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME,
+    RESULTS_QUEUE_NAME,
 };
 
 fn main() -> Result<()> {
@@ -17,34 +18,38 @@ fn run_service(config: Config) -> Result<()> {
     let best_meme_id = get_best_meme_id(&config)?;
     info!("Getting best meme");
     let mut service = BestMemeFilter::new(best_meme_id);
-    service.run(
-        config,
-        POST_EXTRACTED_URL_QUEUE_NAME,
-        None,
-    )
+    service.run(config, POST_EXTRACTED_URL_QUEUE_NAME, None)
 }
 
 struct BestMemeFilter {
     best_meme_id: String,
-    meme_url: String,
+    best_meme_url: String,
 }
 
 impl BestMemeFilter {
     pub fn new(best_meme_id: String) -> Self {
         Self {
             best_meme_id,
-            meme_url: "".to_string(),
+            best_meme_url: "".to_string(),
         }
     }
 }
 
 impl RabbitService for BestMemeFilter {
-    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
+    fn process_message(&mut self, message: Message, exchange: &BinaryExchange) -> Result<()> {
         match message {
             Message::PostUrl(id, url) => {
                 if id == self.best_meme_id {
                     info!("Best meme with url: {:?} {:?}", id, url);
-                    self.meme_url = url;
+                    self.best_meme_url = url;
+
+                    /* Persist State */
+                    let msg = Message::DataBestMeme(BestMeme {
+                        id: self.best_meme_id.to_string(),
+                        url: self.best_meme_url.to_string(),
+                    });
+                    exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+                    /* */
                 }
             }
             _ => {
@@ -55,9 +60,15 @@ impl RabbitService for BestMemeFilter {
     }
 
     fn on_stream_finished(&self, exchange: &BinaryExchange) -> Result<()> {
-        debug!("Sending best meme url: {}", self.meme_url);
-        let message = Message::PostUrl(self.best_meme_id.clone(), self.meme_url.clone());
-        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)
+        debug!("Sending best meme url: {}", self.best_meme_url);
+        let message = Message::PostUrl(self.best_meme_id.clone(), self.best_meme_url.clone());
+        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)?;
+        
+        /* Reset State Persisted */
+        let msg = Message::DataReset("best_meme_filter".to_string());
+        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)
+        /* */
+    
     }
 }
 

@@ -5,7 +5,7 @@ use log::{error, info, warn};
 use tp2::connection::{BinaryExchange, RabbitConnection};
 use tp2::messages::Message;
 use tp2::service::{RabbitService, TERM_FLAG};
-use tp2::{Config, POST_COLLEGE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME, RECV_TIMEOUT};
+use tp2::{Config, POST_COLLEGE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME, RECV_TIMEOUT, DATA_TO_SAVE_QUEUE_NAME};
 
 fn main() -> Result<()> {
     let env_config = Config::init_from_env().unwrap();
@@ -50,6 +50,14 @@ impl RabbitService for PostAverageFilter {
         }
         Ok(())
     }
+
+    fn on_stream_finished(&self, exchange: &BinaryExchange) -> Result<()> {
+        /* Persist Reset */
+        let msg = Message::DataReset("post_average_filter".to_string());
+        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+        /* */
+        Ok(())
+    }
 }
 
 // Should I use a heap of best memes ids in case the best one is missing?
@@ -58,14 +66,20 @@ fn get_score_average(config: &Config) -> Result<Option<f32>> {
     let mut result = None;
     {
         let consumer = connection.get_consumer(POST_SCORE_AVERAGE_QUEUE_NAME)?;
+        let exchange = connection.get_direct_exchange();
+        let bin_exchange = BinaryExchange::new(exchange, None, 0, 0);
         while !TERM_FLAG.load(Ordering::Relaxed) {
             let consumer_message = consumer.receiver().recv_timeout(RECV_TIMEOUT);
             // Return if valid score mean, keep iterating otherwise
             if let Ok(ConsumerMessage::Delivery(delivery)) = consumer_message {
                 match bincode::deserialize::<Message>(&delivery.body) {
                     Ok(Message::PostScoreMean(mean)) => {
-                        consumer.ack(delivery)?;
                         result = Some(mean);
+                        /* Persist State */
+                        let msg = Message::DataScoreAverage(mean);
+                        bin_exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+                        /* */
+                        consumer.ack(delivery)?;
                         break
                     }
                     _ => {

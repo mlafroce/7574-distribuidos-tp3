@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use tp2::messages::Message;
 use tp2::{
     Config, FILTERED_POST_ID_SENTIMENT_QUEUE_NAME, POST_ID_SENTIMENT_QUEUE_NAME,
-    POST_ID_WITH_URL_QUEUE_NAME,
+    POST_ID_WITH_URL_QUEUE_NAME, DATA_TO_SAVE_QUEUE_NAME,
 };
 use tp2::connection::BinaryExchange;
 use tp2::service::RabbitService;
@@ -50,6 +50,14 @@ impl RabbitService for PostSentimentFilter {
         }
         Ok(())
     }
+
+    fn on_stream_finished(&self, exchange: &BinaryExchange) -> Result<()> {
+        /* Persist Reset */
+        let msg = Message::DataReset("post_sentiment_filter".to_string());
+        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+        /* */
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -58,10 +66,14 @@ struct PostIdWithUrlConsumer {
 }
 
 impl RabbitService for PostIdWithUrlConsumer {
-    fn process_message(&mut self, message: Message, _: &BinaryExchange) -> Result<()> {
+    fn process_message(&mut self, message: Message, exchange: &BinaryExchange) -> Result<()> {
         match message {
             Message::PostId(id) => {
-                self.ids.insert(id);
+                self.ids.insert(id.clone());
+                /* Persist State */
+                let msg = Message::PostId(id);
+                exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
+                /* */
             }
             _ => {
                 warn!("Invalid message arrived");

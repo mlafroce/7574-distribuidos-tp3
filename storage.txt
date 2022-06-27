@@ -1,0 +1,15 @@
+// service                       | state- ?   | sync | reset
+// best_meme_filter              | state-full | ok   | ok
+// comment_college_filter        | state-less | -    | -
+// comment_producer              | state-less | -    | -
+// comment_sentiment_extractor   | state-less | -    | -
+// mean_calculator               | state-full | ok   | ok
+// post_average_filter           | state-full | ok   | ok
+// post_college_filter           | state-full | ok   | ok
+// post_producer                 | state-less | -    | -
+// post_sentiment_calculator     | state-full | ok   | ok
+// post_sentiment_filter         | state-full | ok   | ok
+// results_consumer              |            |      |
+// saver                         | -          | -    | -
+// score_extractor               | state-less | -    | -
+// url_extractor                 | state-less | -    | -

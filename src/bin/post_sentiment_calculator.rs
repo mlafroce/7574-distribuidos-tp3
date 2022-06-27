@@ -44,7 +44,11 @@ impl RabbitService for PostSentimentCalculator {
     fn on_stream_finished(&self, bin_exchange: &BinaryExchange) -> Result<()> {
         let post_sentiment = get_highest_post_sentiment(&self.post_sentiments_map);
         let msg = Message::PostIdSentiment(post_sentiment.0, post_sentiment.1);
-        bin_exchange.send_with_key(&msg, POST_SENTIMENT_MEAN_QUEUE_NAME)
+        bin_exchange.send_with_key(&msg, POST_SENTIMENT_MEAN_QUEUE_NAME)?;
+        /* Persist Reset */
+        let msg_reset = Message::DataReset("post_sentiment_calculator".to_string());
+        bin_exchange.send_with_key(&msg_reset, DATA_TO_SAVE_QUEUE_NAME)
+        /* */
     }
 }
 
