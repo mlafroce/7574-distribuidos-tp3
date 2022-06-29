@@ -8,19 +8,25 @@ const MAXIMUM_CONNECTION_RETRIES: u32 = 3;
 pub struct TaskManager {
     service: String,
     connection_retries: u32,
+    service_port: String,
+    timeout_sec: u64,
+    sec_between_requests: u64
 }
 
 impl TaskManager {
 
-    pub fn new(service: &str) -> TaskManager {
+    pub fn new(service: String, service_port: String, timeout_sec: u64, sec_between_requests: u64) -> TaskManager {
         TaskManager {
-            service: String::from(service),
-            connection_retries: 0
+            service,
+            connection_retries: 0,
+            service_port,
+            timeout_sec,
+            sec_between_requests
         }
     }
 
     pub fn run(&mut self) {
-        let health_checker = HealthChecker::new(&format!("{}:7890", self.service), 80, 10);
+        let health_checker = HealthChecker::new(&format!("{}:{}", self.service, self.service_port), self.timeout_sec, self.sec_between_requests);
         health_checker.run_health_checker(self);
     }
 
