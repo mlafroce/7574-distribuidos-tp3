@@ -7,6 +7,7 @@ pub mod messages;
 pub mod post;
 pub mod service;
 pub mod health_checker;
+pub mod task_manager;
 
 #[derive(Clone, Envconfig)]
 pub struct Config {
