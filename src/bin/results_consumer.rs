@@ -5,7 +5,8 @@ use std::sync::atomic::Ordering;
 use tp2::messages::Message;
 use tp2::middleware::service::{init, TERM_FLAG};
 use tp2::{Config, RECV_TIMEOUT, RESULTS_QUEUE_NAME};
-use tp2::middleware::buf_queue::BufConsumer;
+use tp2::middleware::buf_consumer::BufConsumer;
+use tp2::middleware::consumer::DeliveryConsumer;
 
 const N_RESULTS: usize = 1;
 
@@ -42,37 +43,40 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
     // Query results
     let mut count = 0;
     let mut results = Results::default();
-    let mut data_received = (false, false, false);
+    let mut data_received = (false, true, true);
     let consumer = queue.consume(ConsumerOptions::default())?;
+    let consumer = DeliveryConsumer::new(consumer);
     let mut buf_consumer = BufConsumer::new(consumer);
     info!("Starting iteration");
-    while !TERM_FLAG.load(Ordering::Relaxed) {
-        let message = buf_consumer.next();
-        match message {
-            Some(Message::PostScoreMean(mean)) => {
-                info!("got mean: {:?}", mean);
-                results.score_mean = mean;
-                data_received.0 = true;
-            }
-            Some(Message::PostUrl(id, url)) => {
-                info!("got best meme url: {:?}, {}", url, id);
-                results.best_meme = url;
-                data_received.1 = true;
-            }
-            Some(Message::CollegePostUrl(url)) => {
-                results.college_posts.push(url);
-            }
-            Some(Message::EndOfStream) => {
-                info!("College posts ended");
-                count += 1;
-                if count == N_RESULTS {
-                    data_received.2 = true;
+    for (bulk, delivery) in  buf_consumer {
+        for message in bulk {
+            match message {
+                Message::PostScoreMean(mean) => {
+                    info!("got mean: {:?}", mean);
+                    results.score_mean = mean;
+                    data_received.0 = true;
+                }
+                Message::PostUrl(id, url) => {
+                    info!("got best meme url: {:?}, {}", url, id);
+                    results.best_meme = url;
+                    data_received.1 = true;
+                }
+                Message::CollegePostUrl(url) => {
+                    results.college_posts.push(url);
+                }
+                Message::EndOfStream => {
+                    info!("College posts ended");
+                    count += 1;
+                    if count == N_RESULTS {
+                        data_received.2 = true;
+                    }
+                }
+                _ => {
+                    error!("Invalid message arrived {:?}", message);
                 }
             }
-            _ => {
-                error!("Invalid message arrived {:?}", message);
-            }
         }
+        delivery.ack(&channel)?;
         if data_received.0 && data_received.1 && data_received.2 {
             break;
         }

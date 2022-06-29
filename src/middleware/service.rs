@@ -2,14 +2,15 @@ use super::connection::{BinaryExchange, RabbitConnection};
 use crate::messages::Message;
 use crate::middleware::buf_exchange::BufExchange;
 use crate::middleware::RabbitExchange;
-use crate::{Config, RECV_TIMEOUT};
+use crate::Config;
 use amiquip::{Result};
 use envconfig::Envconfig;
 use lazy_static::lazy_static;
 use log::{info};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool};
 use std::sync::Arc;
-use crate::middleware::buf_queue::BufConsumer;
+use crate::middleware::buf_consumer::BufConsumer;
+use crate::middleware::consumer::DeliveryConsumer;
 
 // global
 lazy_static! {
@@ -45,26 +46,30 @@ pub trait RabbitService {
             let exchange = connection.get_direct_exchange();
             let channel = connection.get_channel();
             let consumer = connection.get_consumer(consumer)?;
+            let consumer = DeliveryConsumer::new(consumer);
             let bin_exchange = BinaryExchange::new(exchange, output_key.clone(), producers, consumers);
             let buf_consumer = BufConsumer::new(consumer);
             let mut exchange = BufExchange::new(bin_exchange, channel, output_key);
 
-            //while !TERM_FLAG.load(Ordering::Relaxed) {
-            for message in  buf_consumer {
-                match message {
-                    Message::EndOfStream => {
-                        let stream_finished = exchange.end_of_stream()?;
-                        if stream_finished {
-                            self.on_stream_finished(&mut exchange)?;
-                            break;
-                        } else {
-                            continue;
+            'bulk_loop: for (bulk, delivery) in  buf_consumer {
+                for message in bulk {
+                    match message {
+                        Message::EndOfStream => {
+                            let stream_finished = exchange.end_of_stream()?;
+                            if stream_finished {
+                                self.on_stream_finished(&mut exchange)?;
+                                delivery.ack(&channel)?;
+                                break 'bulk_loop;
+                            } else {
+                                continue;
+                            }
+                        }
+                        _ => {
+                            self.process_message(message, &mut exchange)?;
                         }
                     }
-                    _=> {
-                        self.process_message(message, &mut exchange)?;
-                    }
                 }
+                delivery.ack(&channel)?;
             }
         }
         info!("Exit");

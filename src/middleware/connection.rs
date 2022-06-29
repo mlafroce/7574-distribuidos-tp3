@@ -116,6 +116,7 @@ impl RabbitExchange for BinaryExchange<'_> {
             }
             Ordering::Equal => {
                 self.finished_producers += 1;
+                info!("Sending {} EOS", self.consumers);
                 for _ in 0..self.consumers {
                     self.send(&self.eos_message.clone())?;
                 }

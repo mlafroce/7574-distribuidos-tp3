@@ -1,6 +1,8 @@
 pub mod buf_exchange;
-pub mod buf_queue;
+pub mod buf_consumer;
 pub mod connection;
+pub mod consumer;
+pub mod message_processor;
 pub mod service;
 
 use amiquip::{Consumer, Delivery, Error, Result};
