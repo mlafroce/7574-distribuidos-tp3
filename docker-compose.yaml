@@ -197,18 +197,6 @@ services:
       - CONSUMERS=2
     networks:
       - tp3_net
-
-  saver:
-    container_name: saver
-    image: memes-nodes:latest
-    depends_on:
-      rabbitmq_config:
-        condition: service_completed_successfully
-    command: saver
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-    networks:
-      - tp3_net
     
 networks:
   tp3_net:
