@@ -1,6 +1,5 @@
 use super::connection::{BinaryExchange, RabbitConnection};
-use crate::messages::Message;
-use crate::middleware::buf_exchange::BufExchange;
+use crate::messages::{BulkBuilder, Message};
 use crate::middleware::RabbitExchange;
 use crate::Config;
 use amiquip::{Result};
@@ -28,17 +27,28 @@ pub fn init() -> Config {
 }
 
 pub trait RabbitService {
-    fn process_message<E: RabbitExchange>(
+    fn process_message(
         &mut self,
         message: Message,
-        bin_exchange: &mut E,
-    ) -> Result<()>;
+    ) -> Option<Message>;
 
-    fn on_stream_finished<E: RabbitExchange>(&self, _: &mut E) -> Result<()> {
-        Ok(())
+    fn on_stream_finished(&self) -> Option<Message> {
+        None
+    }
+
+    fn send_process_output<E: RabbitExchange>(&self, exchange: &mut E, message: Message) -> Result<()> {
+        exchange.send(&message)
     }
 
     fn run(&mut self, config: Config, consumer: &str, output_key: Option<String>) -> Result<()> {
+        self._run(config, consumer, output_key, false)
+    }
+
+    fn run_once(&mut self, config: Config, consumer: &str, output_key: Option<String>) -> Result<()> {
+        self._run(config, consumer, output_key, true)
+    }
+
+    fn _run(&mut self, config: Config, consumer: &str, output_key: Option<String>, run_once: bool) -> Result<()> {
         let consumers = str::parse::<usize>(&config.consumers).unwrap();
         let producers = str::parse::<usize>(&config.producers).unwrap();
         let connection = RabbitConnection::new(&config)?;
@@ -47,29 +57,38 @@ pub trait RabbitService {
             let channel = connection.get_channel();
             let consumer = connection.get_consumer(consumer)?;
             let consumer = DeliveryConsumer::new(consumer);
-            let bin_exchange = BinaryExchange::new(exchange, output_key.clone(), producers, consumers);
+            let mut exchange = BinaryExchange::new(exchange, output_key, producers, consumers);
             let buf_consumer = BufConsumer::new(consumer);
-            let mut exchange = BufExchange::new(bin_exchange, channel, output_key);
 
-            'bulk_loop: for (bulk, delivery) in  buf_consumer {
+            let mut stream_finished= run_once;
+            for (bulk, delivery) in  buf_consumer {
+                let mut bulk_builder = BulkBuilder::default();
                 for message in bulk {
                     match message {
                         Message::EndOfStream => {
-                            let stream_finished = exchange.end_of_stream()?;
+                            stream_finished = exchange.end_of_stream()?;
                             if stream_finished {
-                                self.on_stream_finished(&mut exchange)?;
-                                delivery.ack(&channel)?;
-                                break 'bulk_loop;
-                            } else {
-                                continue;
+                                if let Some(result) = self.on_stream_finished() {
+                                    info!("Stream finished with result: {:?}", result);
+                                    bulk_builder.push(&result);
+                                }
                             }
                         }
                         _ => {
-                            self.process_message(message, &mut exchange)?;
+                            if let Some(result) = self.process_message(message) {
+                                bulk_builder.push(&result);
+                            }
                         }
                     }
                 }
-                delivery.ack(&channel)?;
+                if bulk_builder.size() > 0 {
+                    let output = bulk_builder.build();
+                    self.send_process_output(&mut exchange, output)?;
+                }
+                delivery.ack(channel)?;
+                if stream_finished {
+                    break;
+                }
             }
         }
         info!("Exit");

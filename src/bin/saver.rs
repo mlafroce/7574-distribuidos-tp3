@@ -3,7 +3,6 @@ use std::collections::{HashMap, HashSet};
 use amiquip::Result;
 use tp2::messages::Message;
 use tp2::middleware::service::{init, RabbitService};
-use tp2::middleware::RabbitExchange;
 use tp2::{Config, DATA_TO_SAVE_QUEUE_NAME};
 
 struct MeanCalculatorState {
@@ -55,7 +54,7 @@ struct Saver {
 }
 
 impl RabbitService for Saver {
-    fn process_message<E: RabbitExchange>(&mut self, message: Message, _: &mut E) -> Result<()> {
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::DataScore(value) => {
                 self.mean_calculator_state.score = Score {
@@ -102,7 +101,8 @@ impl RabbitService for Saver {
             }
             _ => {}
         }
-        Ok(())
+        //Ok(())
+        None
     }
 }
 

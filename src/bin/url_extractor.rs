@@ -2,10 +2,10 @@ use amiquip::Result;
 use log::warn;
 use tp2::messages::Message;
 use tp2::middleware::service::{init, RabbitService};
-use tp2::middleware::RabbitExchange;
 use tp2::{
     Config, POST_EXTRACTED_URL_QUEUE_NAME, POST_ID_WITH_URL_QUEUE_NAME, POST_URL_QUEUE_NAME,
 };
+use tp2::middleware::RabbitExchange;
 
 fn main() -> Result<()> {
     let env_config = init();
@@ -17,33 +17,30 @@ struct UrlExtractor {
 }
 
 impl RabbitService for UrlExtractor {
-    fn process_message<E: RabbitExchange>(
+    fn process_message (
         &mut self,
         message: Message,
-        exchange: &mut E,
-    ) -> Result<()> {
+    ) -> Option<Message> {
         match message {
             Message::FullPost(post) => {
                 if post.url.starts_with("http") {
-                    let score = Message::PostUrl(post.id.clone(), post.url.clone());
-                    exchange.send_with_key(&score, POST_EXTRACTED_URL_QUEUE_NAME)?;
-                    let id = Message::PostId(post.id);
-                    exchange.send_with_key(&id, POST_ID_WITH_URL_QUEUE_NAME)?;
+                    return Some(Message::PostUrl(post.id, post.url));
                 }
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
+        None
     }
 
-    fn on_stream_finished<E: RabbitExchange>(&self, bin_exchange: &mut E) -> Result<()> {
-        for _ in 0..self.consumers {
-            bin_exchange.send_with_key(&Message::EndOfStream, POST_EXTRACTED_URL_QUEUE_NAME)?;
-            bin_exchange.send_with_key(&Message::EndOfStream, POST_ID_WITH_URL_QUEUE_NAME)?;
-        }
-        Ok(())
+    fn on_stream_finished(&self) -> Option<Message> {
+        Some(Message::EndOfStream)
+    }
+    
+    fn send_process_output<E: RabbitExchange>(&self, exchange: &mut E, message: Message) -> Result<()> {
+        exchange.send_with_key(&message, POST_EXTRACTED_URL_QUEUE_NAME)?;
+        exchange.send_with_key(&message, POST_ID_WITH_URL_QUEUE_NAME)
     }
 }
 

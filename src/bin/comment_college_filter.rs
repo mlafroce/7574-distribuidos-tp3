@@ -2,7 +2,6 @@ use amiquip::Result;
 use log::warn;
 use tp2::messages::Message;
 use tp2::middleware::service::{init, RabbitService};
-use tp2::middleware::RabbitExchange;
 use tp2::{Config, COMMENT_COLLEGE_QUEUE_NAME, POST_ID_COLLEGE_QUEUE_NAME};
 
 fn main() -> Result<()> {
@@ -22,24 +21,21 @@ fn run_service(config: Config) -> Result<()> {
 struct CommentCollegeFilter;
 
 impl RabbitService for CommentCollegeFilter {
-    fn process_message<E: RabbitExchange>(
+    fn process_message (
         &mut self,
         message: Message,
-        exchange: &mut E,
-    ) -> Result<()> {
+    ) -> Option<Message> {
         match message {
             Message::FullComment(comment) => {
                 if comment.is_college_related() {
-                    if let Some(post_id) = comment.parse_post_id() {
-                        let msg = Message::PostId(post_id);
-                        exchange.send(&msg)?;
-                    }
+                    let post_id = comment.parse_post_id()?;
+                    return Some(Message::PostId(post_id));
                 }
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
+        None
     }
 }

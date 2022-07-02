@@ -43,3 +43,27 @@ pub enum Message {
     DataPostId(String),
     DataReset(String)
 }
+
+#[derive(Default, Debug)]
+pub struct BulkBuilder {
+    data_buf: Vec<u8>,
+    data_sizes: Vec<usize>,
+}
+
+impl BulkBuilder {
+    pub fn push<T: Serialize>(&mut self, message: &T) {
+        let mut data = bincode::serialize(&message).unwrap();
+        self.data_sizes.push(data.len());
+        self.data_buf.append(&mut data);
+    }
+
+    pub fn build(&mut self) -> Message {
+        let data = self.data_buf.drain(..).collect();
+        let sizes = self.data_sizes.drain(..).collect();
+        Message::BulkMessage(data, sizes)
+    }
+
+    pub fn size(&self) -> usize {
+        self.data_buf.len() + self.data_sizes.len() * std::mem::size_of::<usize>()
+    }
+}

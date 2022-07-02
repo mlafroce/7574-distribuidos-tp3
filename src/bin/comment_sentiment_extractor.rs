@@ -22,24 +22,20 @@ fn run_service(config: Config) -> Result<()> {
 struct CommentSentimentExtractor;
 
 impl RabbitService for CommentSentimentExtractor {
-    fn process_message<E: RabbitExchange>(
+    fn process_message(
         &mut self,
         message: Message,
-        bin_exchange: &mut E,
-    ) -> Result<()> {
+    ) -> Option<Message> {
         match message {
             Message::FullComment(comment) => {
-                if let Some(post_id) = comment.parse_post_id() {
-                    if let Ok(sentiment) = str::parse::<f32>(&comment.sentiment) {
-                        let msg = Message::PostIdSentiment(post_id, sentiment);
-                        bin_exchange.send(&msg)?;
-                    }
-                }
+                let post_id = comment.parse_post_id()?;
+                let sentiment = str::parse::<f32>(&comment.sentiment).ok()?;
+                Some(Message::PostIdSentiment(post_id, sentiment))
             }
             _ => {
                 warn!("Invalid message arrived");
+                None
             }
         }
-        Ok(())
     }
 }

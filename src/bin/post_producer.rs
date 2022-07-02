@@ -24,7 +24,7 @@ fn run_service(config: Config, posts_file: String) -> Result<()> {
         let exchange =
             connection.get_named_exchange(POSTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
         let bin_exchange = BinaryExchange::new(exchange, None, 1, consumers);
-        let mut exchange = BufExchange::new(bin_exchange, connection.get_channel(), None);
+        let mut exchange = BufExchange::new(bin_exchange, None);
         let posts = PostIterator::from_file(&posts_file);
         info!("Iterating posts");
         let published = posts

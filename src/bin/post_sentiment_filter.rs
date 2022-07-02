@@ -35,31 +35,21 @@ struct PostSentimentFilter {
 }
 
 impl RabbitService for PostSentimentFilter {
-    fn process_message<E: RabbitExchange>(
+    fn process_message (
         &mut self,
         message: Message,
-        bin_exchange: &mut E,
-    ) -> Result<()> {
+    ) -> Option<Message> {
         match message {
             Message::PostIdSentiment(post_id, sentiment) => {
                 if self.ids.contains(&post_id) {
-                    let msg = Message::PostIdSentiment(post_id, sentiment);
-                    bin_exchange.send(&msg)?;
+                    return Some(Message::PostIdSentiment(post_id, sentiment));
                 }
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
-    }
-
-    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
-        /* Persist Reset */
-        let msg = Message::DataReset("post_sentiment_filter".to_string());
-        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-        /* */
-        Ok(())
+        None
     }
 }
 
@@ -69,20 +59,16 @@ struct PostIdWithUrlConsumer {
 }
 
 impl RabbitService for PostIdWithUrlConsumer {
-    fn process_message<E: RabbitExchange>(&mut self, message: Message, exchange: &mut E) -> Result<()> {
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
-            Message::PostId(id) => {
+            Message::PostUrl(id, _) => {
                 self.ids.insert(id.clone());
-                /* Persist State */
-                let msg = Message::PostId(id);
-                exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-                /* */
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
+        None
     }
 }
 

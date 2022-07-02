@@ -28,31 +28,21 @@ struct PostCollegeFilter {
 }
 
 impl RabbitService for PostCollegeFilter {
-    fn process_message<E: RabbitExchange>(
+    fn process_message(
         &mut self,
         message: Message,
-        exchange: &mut E,
-    ) -> Result<()> {
+    ) -> Option<Message> {
         match message {
             Message::PostUrl(id, url) => {
                 if self.ids.contains(&id) {
-                    let msg = Message::CollegePostUrl(url);
-                    exchange.send(&msg)?;
+                    return Some(Message::CollegePostUrl(url));
                 }
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
-    }
-
-    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
-        /* Persist Reset */
-        let msg = Message::DataReset("post_college_filter".to_string());
-        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-        /* */
-        Ok(())
+        None
     }
 }
 
@@ -62,20 +52,16 @@ struct CollegePostIdConsumer {
 }
 
 impl RabbitService for CollegePostIdConsumer {
-    fn process_message<E: RabbitExchange>(&mut self, message: Message, exchange: &mut E) -> Result<()> {
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostId(id) => {
                 self.ids.insert(id.clone());
-                /* Persist State */
-                let msg = Message::DataPostIdCollege(id);
-                exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-                /* */
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
+        None
     }
 }
 

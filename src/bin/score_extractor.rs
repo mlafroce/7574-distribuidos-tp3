@@ -13,21 +13,19 @@ fn main() -> Result<()> {
 struct ScoreExtractor;
 
 impl RabbitService for ScoreExtractor {
-    fn process_message<E: RabbitExchange>(
+    fn process_message(
         &mut self,
         message: Message,
-        bin_exchange: &mut E,
-    ) -> Result<()> {
+    ) -> Option<Message> {
         match message {
             Message::FullPost(post) => {
-                let score = Message::PostScore(post.score);
-                bin_exchange.send(&score)?;
+                Some(Message::PostScore(post.score))
             }
             _ => {
-                warn!("Invalid message arrived");
+                warn!("Invalid message arrived: {:?}", message);
+                None
             }
         }
-        Ok(())
     }
 }
 

@@ -1,57 +1,39 @@
-use crate::messages::Message::BulkMessage;
 use crate::middleware::connection::BinaryExchange;
 use crate::middleware::RabbitExchange;
-use amiquip::{Channel, Delivery, Result};
+use amiquip::Result;
 use serde::Serialize;
+use crate::messages::BulkBuilder;
 
 const MAX_BUF_SIZE: usize = 1_000_000;
 
 pub struct BufExchange<'a> {
     exchange: BinaryExchange<'a>,
-    channel: &'a Channel,
-    message_buf: Vec<u8>,
-    message_sizes: Vec<usize>,
-    delivery_buf: Vec<Delivery>,
     max_buf_size: usize,
-    routing_key: String,
+    bulk_builder: BulkBuilder,
 }
 
 impl<'a> BufExchange<'a> {
     pub fn new(
         exchange: BinaryExchange<'a>,
-        channel: &'a Channel,
         routing_key: Option<String>,
     ) -> Self {
-        let message_buf = Vec::new();
-        let message_sizes = Vec::new();
-        let delivery_buf = Vec::new();
         let max_buf_size = MAX_BUF_SIZE;
         let routing_key = routing_key.unwrap_or("".to_string());
+        let bulk_builder = BulkBuilder::default();
         Self {
             exchange,
-            channel,
-            routing_key,
-            message_buf,
-            message_sizes,
-            delivery_buf,
             max_buf_size,
+            bulk_builder,
         }
     }
 
     pub fn flush(&mut self) -> Result<()> {
-        if self.message_buf.is_empty() {
-            return Ok(());
+        if self.bulk_builder.size() > 0 {
+            let msg = self.bulk_builder.build();
+            self.exchange.send(&msg)
+        } else {
+            Ok(())
         }
-        let message = BulkMessage(self.message_buf.clone(), self.message_sizes.clone());
-        self.exchange.send_with_key(&message, &self.routing_key)?;
-        for delivery in self.delivery_buf.drain(..) {
-            delivery.ack(&self.channel)?;
-        }
-        self.delivery_buf = Vec::new();
-        self.message_buf.clear();
-        self.message_sizes.clear();
-        self.delivery_buf.clear();
-        Ok(())
     }
 }
 
@@ -66,21 +48,18 @@ impl RabbitExchange for BufExchange<'_> {
     where
         T: Serialize,
     {
-        let mut data = bincode::serialize(message).unwrap();
-        if self.message_buf.len() + data.len() > self.max_buf_size && !self.message_buf.is_empty() {
-            self.flush()?;
+        self.bulk_builder.push(message);
+        if self.bulk_builder.size() > self.max_buf_size {
+            return self.flush();
         }
-        self.message_sizes.push(data.len());
-        self.message_buf.append(&mut data);
         Ok(())
     }
 
-    fn send_with_key<T>(&mut self, message: &T, key: &str) -> Result<()>
+    fn send_with_key<T>(&mut self, _message: &T, _key: &str) -> Result<()>
     where
         T: Serialize,
     {
-        self.flush()?;
-        self.exchange.send_with_key(message, key)
+        todo!()
     }
 
     fn end_of_stream(&mut self) -> Result<bool> {

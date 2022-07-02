@@ -26,7 +26,7 @@ fn run_service(config: Config, comments_file: String) -> Result<()> {
         let exchange =
             connection.get_named_exchange(COMMENTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
         let bin_exchange = BinaryExchange::new(exchange, None, 1, consumers);
-        let mut exchange = BufExchange::new(bin_exchange, connection.get_channel(), None);
+        let mut exchange = BufExchange::new(bin_exchange,  None);
         let comments = CommentIterator::from_file(&comments_file);
         info!("Iterating comments");
         let published = comments

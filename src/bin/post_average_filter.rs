@@ -18,7 +18,9 @@ fn main() -> Result<()> {
 
 fn run_service(config: Config) -> Result<()> {
     info!("Getting score average");
-    if let Some(score_average) = get_score_average(&config)? {
+    let mut consumer = PostAverageConsumer::default();
+    consumer.run_once(config.clone(), POST_SCORE_AVERAGE_QUEUE_NAME, None)?;
+    if let Some(score_average) = consumer.score_average {
         info!("Filtering above average");
         let mut service = PostAverageFilter { score_average };
         service.run(
@@ -37,64 +39,42 @@ struct PostAverageFilter {
 }
 
 impl RabbitService for PostAverageFilter {
-    fn process_message<E: RabbitExchange>(
+    fn process_message(
         &mut self,
         message: Message,
-        exchange: &mut E,
-    ) -> Result<()> {
+    ) -> Option<Message> {
         match message {
             Message::FullPost(post) => {
                 if post.score as f32 > self.score_average && post.url.starts_with("https") {
-                    let msg = Message::PostUrl(post.id, post.url);
-                    exchange.send(&msg)?;
+                    return Some(Message::PostUrl(post.id, post.url));
                 }
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
-    }
-
-    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
-        /* Persist Reset */
-        let msg = Message::DataReset("post_average_filter".to_string());
-        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-        /* */
-        Ok(())
+        None
     }
 }
 
-// Should I use a heap of best memes ids in case the best one is missing?
-fn get_score_average(config: &Config) -> Result<Option<f32>> {
-    let connection = RabbitConnection::new(config)?;
-    let mut result = None;
-    {
-        let consumer = connection.get_consumer(POST_SCORE_AVERAGE_QUEUE_NAME)?;
-        let exchange = connection.get_direct_exchange();
-        let mut bin_exchange = BinaryExchange::new(exchange, None, 0, 0);
-        while !TERM_FLAG.load(Ordering::Relaxed) {
-            let consumer_message = consumer.receiver().recv_timeout(RECV_TIMEOUT);
-            // Return if valid score mean, keep iterating otherwise
-            if let Ok(ConsumerMessage::Delivery(delivery)) = consumer_message {
-                match bincode::deserialize::<Message>(&delivery.body) {
-                    Ok(Message::PostScoreMean(mean)) => {
-                        result = Some(mean);
-                        /* Persist State */
-                        let msg = Message::DataScoreAverage(mean);
-                        bin_exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-                        /* */
-                        consumer.ack(delivery)?;
-                        break
-                    }
-                    _ => {
-                        error!("Invalid message arrived");
-                    }
-                }
-                consumer.ack(delivery)?;
+#[derive(Default)]
+struct PostAverageConsumer {
+    score_average: Option<f32>
+}
+
+impl RabbitService for PostAverageConsumer {
+    fn process_message(
+        &mut self,
+        message: Message,
+    ) -> Option<Message> {
+        match message {
+            Message::PostScoreMean(mean) => {
+                self.score_average = Some(mean);
+            }
+            _ => {
+                warn!("Invalid message arrived");
             }
         }
+        None
     }
-    connection.close()?;
-    Ok(result)
 }

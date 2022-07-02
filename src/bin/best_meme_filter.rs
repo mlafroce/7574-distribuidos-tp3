@@ -16,7 +16,10 @@ fn main() -> Result<()> {
 
 fn run_service(config: Config) -> Result<()> {
     info!("Getting best meme id");
-    let best_meme_id = get_best_meme_id(&config)?;
+    let mut id_service = BestMemeIdConsumer::default();
+    id_service.run_once(config.clone(), POST_SENTIMENT_MEAN_QUEUE_NAME, None)?;
+    info!("Got sentiment {:?}", id_service.best_meme_id_sentiment);
+    let best_meme_id = id_service.best_meme_id_sentiment.0;
     info!("Getting best meme");
     let mut service = BestMemeFilter::new(best_meme_id);
     service.run(config, POST_EXTRACTED_URL_QUEUE_NAME, None)
@@ -37,62 +40,57 @@ impl BestMemeFilter {
 }
 
 impl RabbitService for BestMemeFilter {
-    fn process_message<E: RabbitExchange>(&mut self, message: Message, exchange: &mut E) -> Result<()> {
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostUrl(id, url) => {
                 if id == self.best_meme_id {
-                    info!("Best meme with url: {:?} {:?}", id, url);
                     self.best_meme_url = url;
-
-                    /* Persist State */
-                    let msg = Message::DataBestMeme(BestMeme {
-                        id: self.best_meme_id.to_string(),
-                        url: self.best_meme_url.to_string(),
-                    });
-                    exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-                    /* */
                 }
             }
             _ => {
                 warn!("Invalid message arrived");
             }
         }
-        Ok(())
+        None
     }
 
-    fn on_stream_finished<E: RabbitExchange>(&self, exchange: &mut E) -> Result<()> {
+    fn on_stream_finished(&self) -> Option<Message> {
         debug!("Sending best meme url: {}", self.best_meme_url);
-        let message = Message::PostUrl(self.best_meme_id.clone(), self.best_meme_url.clone());
-        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)?;
+        Some(Message::PostUrl(self.best_meme_id.clone(), self.best_meme_url.clone()))
+    }
 
-        /* Reset State Persisted */
-        let msg = Message::DataReset("best_meme_filter".to_string());
-        exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)
-        /* */
+    fn send_process_output<E: RabbitExchange>(&self, exchange: &mut E, message: Message) -> Result<()> {
+        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)
+    }
+}
+// Should I use a heap of best memes ids in case the best one is missing?
+
+struct BestMemeIdConsumer {
+    best_meme_id_sentiment: (String, f32),
+}
+
+impl Default for BestMemeIdConsumer {
+    fn default() -> Self {
+        let best_meme_id_sentiment = ("".to_string(), f32::MIN);
+        Self { best_meme_id_sentiment }
     }
 }
 
-// Should I use a heap of best memes ids in case the best one is missing?
-fn get_best_meme_id(config: &Config) -> Result<String> {
-    let connection = RabbitConnection::new(config)?;
-    let mut best_meme_id_sentiment = ("".to_string(), f32::MIN);
-    {
-        let consumer = connection.get_consumer(POST_SENTIMENT_MEAN_QUEUE_NAME)?;
-        if let Some(ConsumerMessage::Delivery(delivery)) = consumer.receiver().iter().next() {
-            match bincode::deserialize::<Message>(&delivery.body) {
-                Ok(Message::PostIdSentiment(id, sentiment)) => {
-                    if sentiment > best_meme_id_sentiment.1 {
-                        best_meme_id_sentiment = (id, sentiment);
-                    }
-                }
-                _ => {
-                    error!("Invalid message arrived");
+impl RabbitService for BestMemeIdConsumer {
+    fn process_message(
+        &mut self,
+        message: Message,
+    ) -> Option<Message> {
+        match message {
+            Message::PostIdSentiment(id, sentiment) => {
+                if sentiment > self.best_meme_id_sentiment.1 {
+                    self.best_meme_id_sentiment = (id, sentiment);
                 }
             }
-            consumer.ack(delivery)?;
+            _ => {
+                error!("Invalid message arrived");
+            }
         }
+        None
     }
-    info!("Best meme sentiment: {:?}", best_meme_id_sentiment);
-    connection.close()?;
-    Ok(best_meme_id_sentiment.0)
 }
