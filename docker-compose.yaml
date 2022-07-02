@@ -9,6 +9,8 @@ services:
       - RABBITMQ_DEFAULT_PASS=guest
     ports:
      - 15672:15672
+    logging:
+      driver: none
     networks:
       - tp3_net
 
@@ -195,6 +197,45 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - CONSUMERS=2
+    networks:
+      - tp3_net
+
+  task_management_0:
+    container_name: task_management_0
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: task_management
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - PROCESS_ID=0
+    networks:
+      - tp3_net
+
+  task_management_1:
+    container_name: task_management_1
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: task_management
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - PROCESS_ID=1
+    networks:
+      - tp3_net
+  
+  task_management_2:
+    container_name: task_management_2
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: task_management
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - PROCESS_ID=2
     networks:
       - tp3_net
     

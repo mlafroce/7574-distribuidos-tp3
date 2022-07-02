@@ -1,10 +1,62 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::net::UdpSocket;
+use std::time::Duration;
 use envconfig::Envconfig;
-use std::thread;
+use log::info;
+use tp2::leader_election::{LeaderElection, id_to_dataaddr, TEAM_MEMBERS, TIMEOUT};
+use tp2::service::init;
+use std::{thread, env};
 use tp2::task_manager::task_manager::TaskManager;
 
+fn send_pong(socket: UdpSocket) {
+    let mut buf = [0; 4];
+    socket
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    for _ in 0..(TEAM_MEMBERS - 1) {
+        if let Ok((_, from)) = socket.recv_from(&mut buf) {
+            socket.send_to("PONG".as_bytes(), from).unwrap();
+        }
+    }
+}
+
+fn send_ping(socket: &UdpSocket, leader_id: usize) -> Result<(), ()> {
+    let mut buf = [0; 4];
+    if let Err(_) = socket.send_to("PING".as_bytes(), id_to_dataaddr(leader_id)) {}
+    socket.set_read_timeout(Some(TIMEOUT)).unwrap();
+    if let Err(_) = socket.recv_from(&mut buf) {
+        Err(())
+    } else {
+        Ok(())
+    }
+}
+
 fn main() {
+    let env_config = init();
+    info!("start");
+    let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
+    let socket = UdpSocket::bind(id_to_dataaddr(process_id)).unwrap();
+    let election = LeaderElection::new(process_id);
+
+    let mut running_service = false;
+
+    loop {  
+        if election.am_i_leader() {
+            info!("i am the leader");
+            if !running_service {
+                running_service = true;
+            }
+            send_pong(socket.try_clone().unwrap());
+        } else {
+            info!("i am not the leader");
+            if let Err(_) = send_ping(&socket, election.get_leader_id()) {
+                election.find_new()
+            }
+        }
+        thread::sleep(Duration::from_secs(5));
+    }
+    /*
     let config = TaskManagementConfig::init_from_env().expect("Failed to read env configuration");
     let filename = config.service_list_file;
     let file = File::open(filename.clone()).expect(&format!("Failed to read file: {}", filename.clone()));
@@ -14,8 +66,9 @@ fn main() {
         .collect();
     let task_management = TaskManagement::new(services, config.service_port, config.timeout_sec, config.sec_between_requests);
     task_management.run();
+    */
+    info!("start");
 }
-
 
 #[derive(Clone, Envconfig)]
 pub struct TaskManagementConfig {
