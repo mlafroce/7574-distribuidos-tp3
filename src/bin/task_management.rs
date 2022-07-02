@@ -20,7 +20,7 @@ fn main() {
 #[derive(Clone, Envconfig)]
 pub struct TaskManagementConfig {
     /// Configuration file with the run commands for every service
-    #[envconfig(from = "SERVICE_LIST_FILE", default = "service_list")]
+    #[envconfig(from = "SERVICE_LIST_FILE", default = "services.txt")]
     pub service_list_file: String,
     #[envconfig(from = "SERVICE_PORT", default = "6789")]
     pub service_port: String,

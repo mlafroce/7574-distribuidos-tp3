@@ -30,7 +30,6 @@ impl HealthChecker {
         for stream in listener.incoming() {
             println!("Received new client");
             let stream = stream.expect("Failed to accept new connection in run_health_answerer");
-            stream.set_read_timeout(Option::from(Duration::from_secs(self.timeout_sec))).expect("Failed trying to set read_timeout in run_health_answerer");
             self.answer_health_messages(&stream, HealthMsg::Ping, HealthMsg::Pong, handler);
             let _ = stream.shutdown(Shutdown::Both);
         }

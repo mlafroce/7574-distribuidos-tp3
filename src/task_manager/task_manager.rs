@@ -32,7 +32,14 @@ impl TaskManager {
 
     pub fn start_service(&mut self) {
         println!("Task manager start_service for service: {}", self.service);
-        Command::new("docker-compose").arg("up").arg(self.service.clone()).spawn().expect("Failed to start new service");
+        // ??
+        // Command::new("docker-compose").arg("up").arg(self.service.clone()).spawn().expect("Failed to start new service");
+    }
+
+    pub fn shutdown_service(&mut self) {
+        println!("Task manager shutdown_service for service: {}", self.service);
+        // ??
+        // Command::new("docker-compose").arg("up").arg(self.service.clone()).spawn().expect("Failed to start new service");
     }
 }
 
@@ -40,12 +47,14 @@ impl HealthCheckerHandler for TaskManager {
     fn handle_connection_closed(&mut self, _health_checker: &HealthChecker) {
         println!("Task manager handle_connection_closed for service: {}", self.service);
         self.connection_retries = 0;
+        self.shutdown_service();
         self.start_service();
     }
 
     fn handle_timeout(&mut self, _health_checker: &HealthChecker) {
         println!("Task manager handle_timeout for service: {}", self.service);
         self.connection_retries = 0;
+        self.shutdown_service();
         self.start_service();
     }
 
@@ -53,6 +62,7 @@ impl HealthCheckerHandler for TaskManager {
         println!("Task manager handle connection refused for service: {}", self.service);
         if self.connection_retries >= MAXIMUM_CONNECTION_RETRIES {
             self.connection_retries = 0;
+            self.shutdown_service();
             self.start_service();
         }
         self.connection_retries += 1;
