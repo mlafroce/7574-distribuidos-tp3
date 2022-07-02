@@ -26,8 +26,8 @@ impl TaskManager {
     }
 
     pub fn run(&mut self) {
-        let health_checker = HealthChecker::new(&format!("{}:{}", self.service, self.service_port), self.timeout_sec, self.sec_between_requests);
-        health_checker.run_health_checker(self);
+        let health_checker = HealthChecker::new(&format!("{}:{}", self.service, self.service_port), self.sec_between_requests);
+        health_checker.run_health_checker(self.timeout_sec, self);
     }
 
     pub fn start_service(&mut self) {
