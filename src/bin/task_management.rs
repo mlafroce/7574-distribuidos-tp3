@@ -51,7 +51,6 @@ impl TaskManagement {
     pub fn run(&self) {
         let mut task_manager_threads = Vec::new();
         for service in self.services.clone() {
-            // Ver como anda, si va chill, no hace falta usar UDP. Si no, tenerlo en cuenta (?
             let service_port = self.service_port.clone();
             let timeout_sec = self.timeout_sec;
             let sec_between_requests = self.sec_between_requests;
@@ -65,6 +64,3 @@ impl TaskManagement {
         }
     }
 }
-
-
-

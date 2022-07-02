@@ -32,14 +32,12 @@ impl TaskManager {
 
     pub fn start_service(&mut self) {
         println!("Task manager start_service for service: {}", self.service);
-        // ??
-        // Command::new("docker-compose").arg("up").arg(self.service.clone()).spawn().expect("Failed to start new service");
+        Command::new("docker").arg("start").arg(self.service.clone()).spawn().expect(&format!("Failed to start service {}", self.service.clone()));
     }
 
     pub fn shutdown_service(&mut self) {
         println!("Task manager shutdown_service for service: {}", self.service);
-        // ??
-        // Command::new("docker-compose").arg("up").arg(self.service.clone()).spawn().expect("Failed to start new service");
+        Command::new("docker").arg("stop").arg(self.service.clone()).spawn().expect(&format!("Failed to start service {}", self.service.clone()));
     }
 }
 
