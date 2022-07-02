@@ -1,25 +1,13 @@
-FROM rust AS builder
-LABEL intermediateStageToBeDeleted=true
-
-COPY src build/src
-COPY Cargo.toml Cargo.lock build/
-RUN cd build && cargo build --release
-
 FROM rust
 
-COPY --from=builder /build/target/release/best_meme_filter /usr/bin/
-COPY --from=builder /build/target/release/comment_college_filter /usr/bin/
-COPY --from=builder /build/target/release/comment_sentiment_extractor /usr/bin/
-COPY --from=builder /build/target/release/comment_producer /usr/bin/
-COPY --from=builder /build/target/release/mean_calculator /usr/bin/
-COPY --from=builder /build/target/release/post_average_filter /usr/bin/
-COPY --from=builder /build/target/release/post_college_filter /usr/bin/
-COPY --from=builder /build/target/release/post_producer /usr/bin/
-COPY --from=builder /build/target/release/post_sentiment_calculator /usr/bin/
-COPY --from=builder /build/target/release/post_sentiment_filter /usr/bin/
-COPY --from=builder /build/target/release/results_consumer /usr/bin/
-COPY --from=builder /build/target/release/score_extractor /usr/bin/
-COPY --from=builder /build/target/release/url_extractor /usr/bin/
-COPY --from=builder /build/target/release/saver /usr/bin/
+RUN USER=root cargo new --bin tp2
+WORKDIR /tp2
 
+COPY Cargo.lock Cargo.lock
+COPY Cargo.toml Cargo.toml
 
+RUN cargo build --release
+RUN rm src/*.rs
+
+COPY src src
+RUN cargo install --path .
