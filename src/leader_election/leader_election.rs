@@ -4,6 +4,7 @@ use std::{
     sync::{Arc, Condvar, Mutex},
     thread,
     time::Duration,
+    mem::size_of,
 };
 
 use log::info;
@@ -59,20 +60,34 @@ impl LeaderElection {
         return election;
     }
 
+    fn build_msg(&self, opcode: u8) -> Vec<u8> {
+        let mut msg = vec![opcode];
+        msg.extend_from_slice(&self.id.to_le_bytes());
+        msg 
+    }
+
+    fn receive(socket: &mut Socket) -> (u8, usize) {
+        let buffer = socket.read(1 + size_of::<usize>());
+
+        let opcode = buffer[0];
+        let peer_id = usize::from_le_bytes(buffer[1..].try_into().unwrap());
+
+        (opcode, peer_id)
+    }
+
     fn handle_member(socket: &mut Socket) {
 
         loop {
-            info!("receiving msgs...");
-            let msg = socket.read(1);
-            let opcode = msg[0];
-            info!("opcode: {:?}", opcode);
+            let (opcode, peer_id) = LeaderElection::receive(socket);
 
             match opcode {
                 b'O' => {
                     info!("O")
                 }
                 b'E' => {
-                    info!("E")
+                    info!("received msg ELECTION from {}", peer_id);
+                    //if peer_id < self.id {
+                    //}
                 }
                 b'C' => {
                     info!("C")
@@ -82,14 +97,13 @@ impl LeaderElection {
         }
 
             /* 
-            match buffer[0] {
+          
                 b'O' => {
                     println!("[{}] recibí OK de {}", self.id, id_from);
                     *self.got_ok.0.lock().unwrap() = true;
                     self.got_ok.1.notify_all();
                 }
                 b'E' => {
-                    println!("[{}] recibí Election de {}", self.id, id_from);
                     if id_from < self.id {
                         socket.write_all(&self.id_to_msg(b'O')).unwrap();
                         //let me = self.clone();
@@ -151,17 +165,9 @@ impl LeaderElection {
         self.get_leader_id() == self.id
     }
 
-    fn id_to_msg(&self, opcode: u8) -> Vec<u8> {
-        // header (O, E, C) | ID
-        let mut msg = vec![opcode];
-        // msg.extend_from_slice(&self.id.to_le_bytes());
-        msg
-    }
-
+    // send msg ELECTION to all process with a greater id
     fn send_election(&mut self) {
-        // P envía el mensaje ELECTION a todos los procesos que tengan número mayor
-        let msg = self.id_to_msg(b'E');
-        println!("sending len: {}", msg.len());
+        let msg = self.build_msg(b'E');
 
         match self.id {
             0 => {
@@ -185,7 +191,7 @@ impl LeaderElection {
     fn make_me_leader(&mut self) {
         println!("[{}] me anuncio como lider", self.id);
 
-        let msg = self.id_to_msg(b'C');
+        let msg = self.build_msg(b'C');
 
         if let Some(member) = self.members.get_mut(&0) {
             member.write(&msg);
