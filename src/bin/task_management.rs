@@ -35,7 +35,7 @@ fn main() {
     info!("start");
     let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
     let socket = UdpSocket::bind(id_to_dataaddr(process_id)).unwrap();
-    let election = LeaderElection::new(process_id);
+    let mut election = LeaderElection::new(process_id);
 
     let mut running_service = false;
 

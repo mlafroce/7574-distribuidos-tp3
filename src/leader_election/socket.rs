@@ -1,24 +1,37 @@
-use std::{net::TcpStream, io::{Read}, thread};
+use std::{io::{Read, Write}, net::TcpStream};
 
-pub fn socket_read(socket: &mut TcpStream) -> Vec<u8> {
-    let mut total_received = 0;
-    let mut received: Vec<u8> = vec![0; 9];
-    let mut rx_bytes = [0; 9];
+const CHUNK_SIZE: usize = 5;
 
-    loop {
+pub struct Socket {
+    stream: TcpStream,
+}
 
-        let bytes_read = socket.read(&mut rx_bytes).unwrap();
-
-        if bytes_read > 0 {
-            println!("hola mundo")
-        }
-        total_received += bytes_read;
-        received.extend_from_slice(&rx_bytes[..bytes_read]);
-
-        if total_received == 9 {
-            break;
-        }
+impl Socket {
+    pub fn new(stream: TcpStream) -> Socket {
+        Socket { stream }
     }
 
-    return received
+    pub fn read(&mut self, n: usize) -> Vec<u8> {
+        let mut n_received = 0;
+        let mut received: Vec<u8> = vec![];
+        let mut received_chunk = [0u8; CHUNK_SIZE];
+
+        loop {
+            let n_bytes = self.stream.read(&mut received_chunk).unwrap();
+
+            n_received += n_bytes;
+            
+            received.extend_from_slice(&received_chunk[..n_bytes]);
+
+            if n_received == n {
+                break;
+            }
+        }
+
+        return received;
+    }
+
+    pub fn write(&mut self, buffer: &Vec<u8>) {
+        self.stream.write_all(buffer).unwrap()
+    }
 }
