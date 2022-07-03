@@ -33,7 +33,7 @@ impl HealthChecker {
 
     #[allow(dead_code)]
     pub fn run_health_checker(&self, timeout_sec: u64, handler: &mut dyn HealthCheckerHandler) {
-        loop {
+        while !handler.shutdown(self) {
             let stream_result = TcpStream::connect(self.address.clone());
             match stream_result {
                 Ok(mut stream) => {
@@ -59,7 +59,7 @@ impl HealthChecker {
                               answer: HealthMsg,
                               handler: &mut dyn HealthCheckerHandler) {
         let mut stop_answering = false;
-        while !stop_answering {
+        while !stop_answering && !handler.shutdown(self) {
             let mut reader = BufReader::new(stream.try_clone().unwrap());
             let mut buffer: [u8; 1] = [0; 1];
             match reader.read_exact(&mut buffer) {

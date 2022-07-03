@@ -1,6 +1,8 @@
 use crate::health_checker::health_checker::HealthChecker;
 use std::process::Command;
 use crate::health_checker::health_checker_handler::HealthCheckerHandler;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 
 const MAXIMUM_CONNECTION_RETRIES: u32 = 3;
@@ -10,18 +12,22 @@ pub struct TaskManager {
     connection_retries: u32,
     service_port: String,
     timeout_sec: u64,
-    sec_between_requests: u64
+    sec_between_requests: u64,
+    shutdown: Arc<AtomicBool>,
+    received_end_from_client: bool
 }
 
 impl TaskManager {
 
-    pub fn new(service: String, service_port: String, timeout_sec: u64, sec_between_requests: u64) -> TaskManager {
+    pub fn new(service: String, service_port: String, timeout_sec: u64, sec_between_requests: u64, shutdown: Arc<AtomicBool>) -> TaskManager {
         TaskManager {
             service,
             connection_retries: 0,
             service_port,
             timeout_sec,
-            sec_between_requests
+            sec_between_requests,
+            shutdown,
+            received_end_from_client: false
         }
     }
 
@@ -64,5 +70,9 @@ impl HealthCheckerHandler for TaskManager {
             self.start_service();
         }
         self.connection_retries += 1;
+    }
+
+    fn shutdown(&mut self, _health_checker: &HealthChecker) -> bool {
+        return (*self.shutdown).fetch_or(self.received_end_from_client, Ordering::Relaxed);
     }
 }
