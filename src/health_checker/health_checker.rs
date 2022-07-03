@@ -26,7 +26,7 @@ impl HealthChecker {
         for stream in listener.incoming() {
             println!("Received new client");
             let stream = stream.expect("Failed to accept new connection in run_health_answerer");
-            self.answer_health_messages(&stream, HealthMsg::Ping, HealthMsg::Pong, handler);
+            self.answer_health_messages(&stream, HealthMsg::Ping, HealthMsg::Exit, handler);
             let _ = stream.shutdown(Shutdown::Both);
         }
     }
@@ -50,7 +50,7 @@ impl HealthChecker {
         }
     }
 
-    fn wait(&self) {
+    fn  wait(&self) {
         thread::sleep(Duration::from_secs(self.sec_between_requests));
     }
 
@@ -69,6 +69,9 @@ impl HealthChecker {
                     if health_msg_received == expected {
                         stream.write_all(&[answer as u8]).unwrap();
                         println!("Sent msg answer: {}", answer as u8);
+                    } else if health_msg_received == HealthMsg::Exit {
+                        println!("Exit received. Proceeding to shutdown");
+                        handler.handle_exit_msg(self);
                     } else {
                         panic!("Received non expected HealthMsg: {:?}, wanted: {:?}", received, answer as u8);
                     }

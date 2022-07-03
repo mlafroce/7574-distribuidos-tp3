@@ -34,6 +34,7 @@ impl TaskManager {
     pub fn run(&mut self) {
         let health_checker = HealthChecker::new(&format!("{}:{}", self.service, self.service_port), self.sec_between_requests);
         health_checker.run_health_checker(self.timeout_sec, self);
+        println!("Finished run_health_checker. Task manager {}", self.service);
     }
 
     pub fn start_service(&mut self) {
@@ -72,7 +73,12 @@ impl HealthCheckerHandler for TaskManager {
         self.connection_retries += 1;
     }
 
+    fn handle_exit_msg(&mut self, _health_checker: &HealthChecker) {
+        println!("Task manager received handle_exit_msg for service {}", self.service);
+        self.received_end_from_client = true;
+    }
+
     fn shutdown(&mut self, _health_checker: &HealthChecker) -> bool {
-        return (*self.shutdown).fetch_or(self.received_end_from_client, Ordering::Relaxed);
+        return self.received_end_from_client || (*self.shutdown).load(Ordering::Relaxed);
     }
 }

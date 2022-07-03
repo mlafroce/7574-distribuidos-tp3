@@ -67,7 +67,7 @@ impl TaskManagement {
             let timeout_sec = self.timeout_sec;
             let sec_between_requests = self.sec_between_requests;
             let shutdown = self.shutdown.clone();
-            task_manager_threads.push(thread::spawn(move || {
+            task_manager_threads.push(spawn(move || {
                 let mut task_manager = TaskManager::new(service.clone(),
                                                         service_port,
                                                         timeout_sec,
@@ -79,6 +79,7 @@ impl TaskManagement {
         for task_manager_thread in task_manager_threads {
             task_manager_thread.join().expect("Failed to join task manager thread");
         }
+        println!("Every task manager joined...");
         signals_thread.join().expect("Failed to join signals_thread");
     }
 }
