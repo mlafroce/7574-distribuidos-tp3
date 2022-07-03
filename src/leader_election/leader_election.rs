@@ -1,10 +1,11 @@
 use std::{
     collections::HashMap,
+    io::Write,
+    mem::size_of,
     net::{TcpListener, TcpStream},
     sync::{Arc, Condvar, Mutex},
     thread,
     time::Duration,
-    mem::size_of,
 };
 
 use log::info;
@@ -30,7 +31,6 @@ pub struct LeaderElection {
 
 impl LeaderElection {
     pub fn new(id: usize) -> LeaderElection {
-
         let mut election = LeaderElection {
             id: id,
             members: HashMap::new(),
@@ -38,10 +38,15 @@ impl LeaderElection {
             got_ok: Arc::new((Mutex::new(false), Condvar::new())),
         };
 
-        let thread_listen_members = thread::spawn(move || LeaderElection::listen_members(id));
+        thread::spawn(move || LeaderElection::listen_members(id));
 
-        for peer_id in MEMBERS {
-            if peer_id == id {
+        let members = MEMBERS.to_vec();
+
+        for peer_id in members[id..].iter() {
+
+            let peer_id_clone = peer_id.clone();
+
+            if *peer_id == id {
                 continue;
             }
             loop {
@@ -49,21 +54,25 @@ impl LeaderElection {
                     TcpStream::connect(&format!("task_management_{}:{}", peer_id, PORT))
                 {
                     info!("connected with {}", peer_id);
-                    election.members.insert(peer_id, Socket::new(stream));
+                    let mut socket = Socket::new(stream.try_clone().unwrap());
+                    let socket_clone = socket.clone();
+                    LeaderElection::send_id(id, &mut socket);
+                    election.members.insert(*peer_id, socket);
+                    thread::spawn(move || {
+                        LeaderElection::receive_messages(id, peer_id_clone, socket_clone)
+                    });
                     break;
                 }
             }
         }
 
-        thread_listen_members.join().unwrap();
-
         return election;
     }
 
-    fn build_msg(&self, opcode: u8) -> Vec<u8> {
+    fn build_msg(opcode: u8, id: usize) -> Vec<u8> {
         let mut msg = vec![opcode];
-        msg.extend_from_slice(&self.id.to_le_bytes());
-        msg 
+        msg.extend_from_slice(&id.to_le_bytes());
+        msg
     }
 
     fn receive(socket: &mut Socket) -> (u8, usize) {
@@ -75,56 +84,69 @@ impl LeaderElection {
         (opcode, peer_id)
     }
 
-    fn handle_member(socket: &mut Socket) {
+    fn send_id(id: usize, socket: &mut Socket) {
+        let mut msg = vec![];
+        msg.extend_from_slice(&id.to_le_bytes());
+        socket.write(&msg);
+    }
+
+    fn receive_id(socket: &mut Socket) -> usize {
+        let buffer = socket.read(size_of::<usize>());
+        return usize::from_le_bytes(buffer.try_into().unwrap());
+    }
+
+    fn send_messages() {}
+
+    fn receive_messages(self_id: usize, from_id: usize, mut socket: Socket) {
+        info!("receiving msgs | from: {}", from_id);
 
         loop {
-            let (opcode, peer_id) = LeaderElection::receive(socket);
+            let (opcode, peer_id) = LeaderElection::receive(&mut socket);
 
             match opcode {
                 b'O' => {
-                    info!("O")
+                    info!("received msg OK from {}", peer_id);
                 }
                 b'E' => {
                     info!("received msg ELECTION from {}", peer_id);
-                    //if peer_id < self.id {
-                    //}
+                    if peer_id < self_id {
+                        let msg = LeaderElection::build_msg(b'O', self_id);
+                        socket.write(&msg);
+                    }
                 }
                 b'C' => {
                     info!("C")
                 }
                 _ => {}
-            }            
+            }
         }
 
-            /* 
-          
-                b'O' => {
-                    println!("[{}] recibí OK de {}", self.id, id_from);
-                    *self.got_ok.0.lock().unwrap() = true;
-                    self.got_ok.1.notify_all();
-                }
-                b'E' => {
-                    if id_from < self.id {
-                        socket.write_all(&self.id_to_msg(b'O')).unwrap();
-                        //let me = self.clone();
-                        //thread::spawn(move || me.find_new());
-                    }
-                }
-                b'C' => {
-                    println!("[{}] recibí nuevo coordinador {}", self.id, id_from);
-                    *self.leader_id.0.lock().unwrap() = Some(id_from);
-                    self.leader_id.1.notify_all();
-                }
-                _ => {}
+        /*
+
+            b'O' => {
+                *self.got_ok.0.lock().unwrap() = true;
+                self.got_ok.1.notify_all();
             }
-            */
+            b'E' => {
+                if id_from < self.id {
+                    socket.write_all(&self.id_to_msg(b'O')).unwrap();
+                    //let me = self.clone();
+                    //thread::spawn(move || me.find_new());
+                }
+            }
+            b'C' => {
+                println!("[{}] recibí nuevo coordinador {}", self.id, id_from);
+                *self.leader_id.0.lock().unwrap() = Some(id_from);
+                self.leader_id.1.notify_all();
+            }
+            _ => {}
+        }
+        */
     }
 
-    fn listen_members(id: usize) {
-        let mut n = 0;
-
+    fn listen_members(self_id: usize) {
         let listener;
-        match TcpListener::bind(format!("task_management_{}:{}", id, PORT)) {
+        match TcpListener::bind(format!("task_management_{}:{}", self_id, PORT)) {
             Ok(tcp_listener) => {
                 info!("server listening on port {}", PORT);
                 listener = tcp_listener
@@ -134,17 +156,9 @@ impl LeaderElection {
 
         for stream_result in listener.incoming() {
             if let Ok(stream) = stream_result {
-                thread::spawn(move || LeaderElection::handle_member(&mut Socket::new(stream)));
-
-                n += 1;
-
-                info!("n: {}", n);
-
-                if n == (MEMBERS.len() - 1) {
-                    info!("break ok");
-                    break
-                }
-
+                let mut socket = Socket::new(stream);
+                let from_id = LeaderElection::receive_id(&mut socket);
+                thread::spawn(move || LeaderElection::receive_messages(self_id, from_id, socket));
             }
         }
     }
@@ -167,7 +181,8 @@ impl LeaderElection {
 
     // send msg ELECTION to all process with a greater id
     fn send_election(&mut self) {
-        let msg = self.build_msg(b'E');
+        info!("send election");
+        let msg = LeaderElection::build_msg(b'E', self.id);
 
         match self.id {
             0 => {
@@ -191,7 +206,7 @@ impl LeaderElection {
     fn make_me_leader(&mut self) {
         println!("[{}] me anuncio como lider", self.id);
 
-        let msg = self.build_msg(b'C');
+        let msg = LeaderElection::build_msg(b'C', self.id);
 
         if let Some(member) = self.members.get_mut(&0) {
             member.write(&msg);

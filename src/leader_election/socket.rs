@@ -1,4 +1,7 @@
-use std::{io::{Read, Write}, net::TcpStream};
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+};
 
 const CHUNK_SIZE: usize = 5;
 
@@ -11,6 +14,12 @@ impl Socket {
         Socket { stream }
     }
 
+    pub fn clone(&self) -> Socket {
+        Socket {
+            stream: self.stream.try_clone().unwrap(),
+        }
+    }
+
     pub fn read(&mut self, n: usize) -> Vec<u8> {
         let mut n_received = 0;
         let mut received: Vec<u8> = vec![];
@@ -20,7 +29,7 @@ impl Socket {
             let n_bytes = self.stream.read(&mut received_chunk).unwrap();
 
             n_received += n_bytes;
-            
+
             received.extend_from_slice(&received_chunk[..n_bytes]);
 
             if n_received == n {
