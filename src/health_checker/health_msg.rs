@@ -8,7 +8,7 @@ pub enum HealthMsg {
 impl TryFrom<u8> for HealthMsg {
     type Error = ();
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             1 => Ok(HealthMsg::Ping),
             2 => Ok(HealthMsg::Pong),

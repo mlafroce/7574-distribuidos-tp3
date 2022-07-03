@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use envconfig::Envconfig;
-use std::thread;
 use tp2::task_manager::task_manager::TaskManager;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

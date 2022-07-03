@@ -1,9 +1,7 @@
-use crate::health_checker::health_checker::HealthChecker;
-
 pub trait HealthCheckerHandler {
-    fn handle_connection_closed(&mut self, health_checker: &HealthChecker);
-    fn handle_timeout(&mut self, health_checker: &HealthChecker);
-    fn handle_connection_refused(&mut self, health_checker: &HealthChecker);
-    fn handle_exit_msg(&mut self, health_checker: &HealthChecker);
-    fn shutdown(&mut self, health_checker: &HealthChecker) -> bool;
+    fn handle_connection_closed(&mut self);
+    fn handle_timeout(&mut self);
+    fn handle_connection_refused(&mut self);
+    fn handle_exit_msg(&mut self);
+    fn shutdown(&mut self) -> bool;
 }
