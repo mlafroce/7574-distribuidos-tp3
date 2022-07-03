@@ -1,10 +1,8 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::net::UdpSocket;
 use std::time::Duration;
 use envconfig::Envconfig;
 use log::info;
-use tp2::leader_election::{LeaderElection, id_to_dataaddr, TEAM_MEMBERS, TIMEOUT};
+use tp2::leader_election::leader_election::{LeaderElection, id_to_dataaddr, TEAM_MEMBERS, TIMEOUT};
 use tp2::service::init;
 use std::{thread, env};
 use tp2::task_manager::task_manager::TaskManager;
@@ -43,13 +41,13 @@ fn main() {
 
     loop {  
         if election.am_i_leader() {
-            info!("i am the leader");
+            info!("leader");
             if !running_service {
                 running_service = true;
             }
             send_pong(socket.try_clone().unwrap());
         } else {
-            info!("i am not the leader");
+            info!("not leader");
             if let Err(_) = send_ping(&socket, election.get_leader_id()) {
                 election.find_new()
             }
