@@ -139,21 +139,19 @@ fn process_input(leader_election: LeaderElection, input: Vector<(usize, u8)>) {
     loop {
         if let Ok(msg_option) = input.pop() {
             if let Some(msg) = msg_option {
-                info!("process input: {:?}", msg);
                 leader_election.process_msg(msg);
             }
         }
     }
 }  
 
-fn process_output(output: Vector<(usize, u8)>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>) {
+fn process_output(output: Vector<(usize, (usize, u8))>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>) {
     loop {
         if let Ok(msg_option) = output.pop() {
             if let Some(msg) = msg_option {
-                info!("process output: {} {}", msg.0, msg.1);
                 if let Ok(mut sockets) = sockets_lock.write() {
                     if let Some(socket) = sockets.get_mut(&msg.0) {
-                        socket.write(&build_msg(msg.1, msg.0));
+                        socket.write(&build_msg(msg.1.1, msg.1.0));
                     }
                 }
             }
@@ -167,7 +165,8 @@ fn main() {
     let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
     let socket = UdpSocket::bind(id_to_dataaddr(process_id)).unwrap();
     let input: Vector<(usize, u8)> = Vector::new();
-    let output: Vector<(usize, u8)> = Vector::new();
+    // (to_id, (from_id, opcode))
+    let output: Vector<(usize, (usize, u8))> = Vector::new();
 
     let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
     let sockets_lock_clone = sockets_lock.clone();

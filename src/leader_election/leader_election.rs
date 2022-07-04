@@ -1,5 +1,6 @@
 use std::{
     sync::{Arc, Condvar, Mutex},
+    thread,
     time::Duration,
 };
 
@@ -19,13 +20,13 @@ pub fn id_to_dataaddr(process_id: usize) -> String {
 #[derive(Clone)]
 pub struct LeaderElection {
     id: usize,
-    output: Vector<(usize, u8)>,
+    output: Vector<(usize, (usize, u8))>,
     leader_id: Arc<(Mutex<Option<usize>>, Condvar)>,
     got_ok: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl LeaderElection {
-    pub fn new(id: usize, output: Vector<(usize, u8)>) -> LeaderElection {
+    pub fn new(id: usize, output: Vector<(usize, (usize, u8))>) -> LeaderElection {
         LeaderElection {
             id: id,
             output: output,
@@ -39,7 +40,7 @@ impl LeaderElection {
             id: self.id.clone(),
             output: self.output.clone(),
             leader_id: self.leader_id.clone(),
-            got_ok: self.got_ok.clone()
+            got_ok: self.got_ok.clone(),
         }
     }
 
@@ -47,14 +48,24 @@ impl LeaderElection {
         let (id_from, opcode) = msg;
 
         match opcode {
-            b'O' => {}
+            b'O' => {
+                println!("received OK from {}", id_from);
+                *self.got_ok.0.lock().unwrap() = true;
+                self.got_ok.1.notify_all();
+            }
             b'E' => {
-                println!("[{}] recibí Election de {}", self.id, id_from);
+                println!("received ELECTION de {}", id_from);
                 if id_from < self.id {
-                    self.output.push((id_from, b'O'));
+                    self.output.push((id_from, (self.id, b'O')));
+                    let mut me = self.clone();
+                    thread::spawn(move || me.find_new());
                 }
             }
-            b'C' => {}
+            b'C' => {
+                println!("received new coordinator {}", id_from);
+                *self.leader_id.0.lock().unwrap() = Some(id_from);
+                self.leader_id.1.notify_all();
+            }
             _ => {}
         }
     }
@@ -80,37 +91,15 @@ impl LeaderElection {
         info!("send election");
         match self.id {
             0 => {
-                self.output.push((1, b'E'));
-                self.output.push((2, b'E'));
+                self.output.push((1, (self.id, b'E')));
+                self.output.push((2, (self.id, b'E')));
             }
             1 => {
-                self.output.push((2, b'E'));
+                self.output.push((2, (self.id, b'E')));
             }
             2 => {}
             _ => {}
         }
-    }
-
-    fn make_me_leader(&mut self) {
-        /*
-        println!("[{}] me anuncio como lider", self.id);
-
-        let msg = LeaderElection::build_msg(b'C', self.id);
-
-        if let Some(member) = self.members.get_mut(&0) {
-            member.write(&msg);
-        }
-
-        if let Some(member) = self.members.get_mut(&1) {
-            member.write(&msg);
-        }
-
-        if let Some(member) = self.members.get_mut(&2) {
-            member.write(&msg);
-        }
-
-        *self.leader_id.0.lock().unwrap() = Some(self.id);
-        */
     }
 
     pub fn find_new(&mut self) {
@@ -118,7 +107,7 @@ impl LeaderElection {
         *self.got_ok.0.lock().unwrap() = false;
         *self.leader_id.0.lock().unwrap() = None;
         self.send_election();
-        /*
+
         match self
             .got_ok
             .1
@@ -126,12 +115,19 @@ impl LeaderElection {
         {
             Ok(got_ok) => {
                 if !*got_ok.0 {
-                    println!("[{}] no recibi ningun ok", self.id);
-                    //self.make_me_leader();
+                    println!("[{}] any ok received", self.id);
+
+                    // make me leader
+                    info!("iam the new lider");
+
+                    self.output.push((0, (self.id, b'C')));
+                    self.output.push((1, (self.id, b'C')));
+                    self.output.push((2, (self.id, b'C')));
+
+                    *self.leader_id.0.lock().unwrap() = Some(self.id);
                 }
             }
             Err(_) => {}
         }
-        */
     }
 }
