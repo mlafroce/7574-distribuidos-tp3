@@ -1,6 +1,7 @@
 docker-image:
 	docker build -f docker/rabbitmq_config.Dockerfile -t "rabbitmq-config:latest" .
 	docker build -f docker/nodes.Dockerfile -t "memes-nodes:latest" .
+	docker build -f docker/task_management.Dockerfile -t "task_management:latest" .
 .PHONY: docker-image
 
 docker-compose-up: docker-image

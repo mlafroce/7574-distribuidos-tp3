@@ -197,6 +197,24 @@ services:
       - CONSUMERS=2
     networks:
       - tp3_net
+
+  task_management1:
+    container_name: task_management1
+    image: task_management:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: task_management
+    environment:
+      - SERVICE_LIST_FILE=services.txt
+      - SERVICE_PORT=6789
+      - TIMEOUT_SEC=80
+      - SEC_BETWEEN_REQUESTS=5
+    volumes:
+      - ./services.txt:/services.txt
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - tp3_net
     
 networks:
   tp3_net:
