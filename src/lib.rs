@@ -5,6 +5,8 @@ pub mod comment;
 pub mod messages;
 pub mod middleware;
 pub mod post;
+pub mod health_checker;
+pub mod task_manager;
 
 #[derive(Clone, Envconfig)]
 pub struct Config {
