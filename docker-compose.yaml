@@ -238,6 +238,19 @@ services:
       - PROCESS_ID=2
     networks:
       - tp3_net
+
+  task_management_3:
+    container_name: task_management_3
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: task_management
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - PROCESS_ID=3
+    networks:
+      - tp3_net
     
 networks:
   tp3_net:

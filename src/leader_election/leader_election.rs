@@ -10,8 +10,8 @@ use super::vector::Vector;
 
 pub const TIMEOUT: Duration = Duration::from_secs(20);
 const FIRST_LIDER: usize = 0;
-pub const TEAM_MEMBERS: usize = 3;
-pub const MEMBERS: [usize; 3] = [0, 1, 2];
+pub const TEAM_MEMBERS: usize = 4;
+pub const MEMBERS: [usize; 4] = [0, 1, 2, 3];
 
 pub fn id_to_dataaddr(process_id: usize) -> String {
     format!("task_management_{}:1235", process_id)
@@ -93,11 +93,15 @@ impl LeaderElection {
             0 => {
                 self.output.push((1, (self.id, b'E')));
                 self.output.push((2, (self.id, b'E')));
+                self.output.push((3, (self.id, b'E')));
             }
             1 => {
                 self.output.push((2, (self.id, b'E')));
+                self.output.push((3, (self.id, b'E')));
             }
-            2 => {}
+            2 => {
+                self.output.push((3, (self.id, b'E')));
+            }
             _ => {}
         }
     }
@@ -123,6 +127,7 @@ impl LeaderElection {
                     self.output.push((0, (self.id, b'C')));
                     self.output.push((1, (self.id, b'C')));
                     self.output.push((2, (self.id, b'C')));
+                    self.output.push((3, (self.id, b'C')));
 
                     *self.leader_id.0.lock().unwrap() = Some(self.id);
                 }

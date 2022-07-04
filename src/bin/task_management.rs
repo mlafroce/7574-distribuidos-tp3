@@ -38,7 +38,7 @@ fn send_ping(socket: &UdpSocket, leader_id: usize) -> Result<(), ()> {
 }
 
 const PORT: &str = "1234";
-const MEMBERS: [usize; 3] = [0, 1, 2];
+const MEMBERS: [usize; 4] = [0, 1, 2, 3];
 
 fn tcp_receive_id(socket: &mut Socket) -> usize{
     let buffer = socket.read(size_of::<usize>());
