@@ -43,8 +43,8 @@ impl LeaderElection {
         }
     }
 
-    pub fn process_msg(&self, msg: (u8, usize)) {
-        let (opcode, id_from) = msg;
+    pub fn process_msg(&self, msg: (usize, u8)) {
+        let (id_from, opcode) = msg;
 
         match opcode {
             b'O' => {}

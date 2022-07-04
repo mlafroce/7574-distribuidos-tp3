@@ -66,16 +66,16 @@ fn receive(socket: &mut Socket) -> (u8, usize) {
     (opcode, peer_id)
 }
 
-fn tcp_receive_messages(from_id: usize, socket: &mut Socket, input: Vector<(u8, usize)>) {
+fn tcp_receive_messages(from_id: usize, socket: &mut Socket, input: Vector<(usize, u8)>) {
     info!("receiving msgs | from: {}", from_id);
 
     loop {
         let msg = receive(socket);
-        input.push(msg)
+        input.push((msg.1, msg.0))
     }
 }
 
-fn tcp_listen(process_id: usize, vector: Vector<(u8, usize)>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>) {
+fn tcp_listen(process_id: usize, vector: Vector<(usize, u8)>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>) {
     let mut threads = Vec::new();
 
     let listener;
@@ -106,7 +106,7 @@ fn tcp_listen(process_id: usize, vector: Vector<(u8, usize)>, sockets_lock: Arc<
     }
 }
 
-fn tcp_connect(process_id: usize, input: Vector<(u8, usize)>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>) {
+fn tcp_connect(process_id: usize, input: Vector<(usize, u8)>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>) {
     let mut input_clone = input.clone();
 
     let members = MEMBERS.to_vec();
@@ -135,7 +135,7 @@ fn tcp_connect(process_id: usize, input: Vector<(u8, usize)>, sockets_lock: Arc<
     }
 }
 
-fn process_input(leader_election: LeaderElection, input: Vector<(u8, usize)>) {
+fn process_input(leader_election: LeaderElection, input: Vector<(usize, u8)>) {
     loop {
         if let Ok(msg_option) = input.pop() {
             if let Some(msg) = msg_option {
@@ -166,7 +166,7 @@ fn main() {
     info!("start");
     let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
     let socket = UdpSocket::bind(id_to_dataaddr(process_id)).unwrap();
-    let input: Vector<(u8, usize)> = Vector::new();
+    let input: Vector<(usize, u8)> = Vector::new();
     let output: Vector<(usize, u8)> = Vector::new();
 
     let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
