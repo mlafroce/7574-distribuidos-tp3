@@ -1,15 +1,16 @@
-pub mod buf_exchange;
 pub mod buf_consumer;
+pub mod buf_exchange;
 pub mod connection;
 pub mod consumer;
 pub mod message_processor;
 pub mod service;
+pub mod transaction_log;
 
 use amiquip::{Consumer, Delivery, Error, Result};
 
 pub enum ServiceError {
     InvalidMessage,
-    RabbitError(Error)
+    RabbitError(Error),
 }
 
 impl From<Error> for ServiceError {

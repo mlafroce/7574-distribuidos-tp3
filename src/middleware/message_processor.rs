@@ -1,25 +1,25 @@
-/*
-use amiquip::{Channel, Delivery};
 use crate::messages::Message;
-trait MessageProcessor {
-    fn process_bulk(&mut self, bulk: Vec<Message>, delivery: Delivery, channel: &Channel) {
-        for message in bulk {
-            self.process_message(message);
-        }
-        delivery.ack(&channel)?;
+use crate::middleware::RabbitExchange;
+use amiquip::Result;
+use serde::Serialize;
+
+
+pub trait MessageProcessor {
+    type State: Serialize;
+
+    fn process_message(&mut self, message: Message) -> Option<Message>;
+
+    fn on_stream_finished(&self) -> Option<Message> {
+        None
     }
 
-    fn process_bulk_message(&mut self, message: Message) -> Option<Message> {
-        match message {
-            Message::EndOfStream => {
-                stream_finished = exchange.end_of_stream()?;
-                if stream_finished {
-                    self.on_stream_finished(&mut exchange)?;
-                }
-            }
-            _ => {
-                self.process_message(message, &mut exchange)?;
-            }
-        }
+    fn send_process_output<E: RabbitExchange>(
+        &self,
+        exchange: &mut E,
+        message: Message,
+    ) -> Result<()> {
+        exchange.send(&message)
     }
-}*/
+
+    fn get_state(&self) -> Option<Self::State> { None }
+}

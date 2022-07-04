@@ -11,7 +11,7 @@ pub struct Config {
     /// logger level: valid values: "DEBUG", "INFO", "WARN", "ERROR"
     #[envconfig(from = "LOGGING_LEVEL", default = "INFO")]
     pub logging_level: String,
-    /// RabbitMQ host
+    /// RabpbitMQ host
     #[envconfig(from = "RABBITMQ_HOST", default = "localhost")]
     pub server_host: String,
     /// RabbitMQ port
@@ -29,6 +29,8 @@ pub struct Config {
     /// Number of consumers reading data (in fanouts, use max number of each endpoint)
     #[envconfig(from = "CONSUMERS", default = "1")]
     pub consumers: String,
+    #[envconfig(from = "TRANSACTION_LOG", default = "transaction.log")]
+    pub transaction_log_path: String
 }
 
 /// Timeout for receive operations

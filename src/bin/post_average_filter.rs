@@ -1,12 +1,12 @@
-use amiquip::{ConsumerMessage, Result};
+use amiquip::Result;
 use envconfig::Envconfig;
-use log::{error, info, warn};
-use std::sync::atomic::Ordering;
+use log::{info, warn};
 use tp2::messages::Message;
-use tp2::middleware::connection::{BinaryExchange, RabbitConnection};
-use tp2::middleware::service::{RabbitService, TERM_FLAG};
-use tp2::middleware::RabbitExchange;
-use tp2::{Config, POST_COLLEGE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME, RECV_TIMEOUT, DATA_TO_SAVE_QUEUE_NAME};
+use tp2::middleware::message_processor::MessageProcessor;
+use tp2::middleware::service::RabbitService;
+use tp2::{
+    Config, POST_COLLEGE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME,
+};
 
 fn main() -> Result<()> {
     let env_config = Config::init_from_env().unwrap();
@@ -18,13 +18,14 @@ fn main() -> Result<()> {
 
 fn run_service(config: Config) -> Result<()> {
     info!("Getting score average");
-    let mut consumer = PostAverageConsumer::default();
-    consumer.run_once(config.clone(), POST_SCORE_AVERAGE_QUEUE_NAME, None)?;
-    if let Some(score_average) = consumer.score_average {
+    let mut processor = PostAverageConsumer::default();
+    let mut consumer = RabbitService::new(config.clone(), &mut processor);
+    consumer.run_once(POST_SCORE_AVERAGE_QUEUE_NAME, None)?;
+    if let Some(score_average) = processor.score_average {
         info!("Filtering above average");
-        let mut service = PostAverageFilter { score_average };
+        let mut processor = PostAverageFilter { score_average };
+        let mut service = RabbitService::new(config, &mut processor);
         service.run(
-            config,
             POST_COLLEGE_QUEUE_NAME,
             Some(POST_URL_AVERAGE_QUEUE_NAME.to_string()),
         )
@@ -38,11 +39,9 @@ struct PostAverageFilter {
     score_average: f32,
 }
 
-impl RabbitService for PostAverageFilter {
-    fn process_message(
-        &mut self,
-        message: Message,
-    ) -> Option<Message> {
+impl MessageProcessor for PostAverageFilter {
+    type State = f32;
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::FullPost(post) => {
                 if post.score as f32 > self.score_average && post.url.starts_with("https") {
@@ -59,14 +58,12 @@ impl RabbitService for PostAverageFilter {
 
 #[derive(Default)]
 struct PostAverageConsumer {
-    score_average: Option<f32>
+    score_average: Option<f32>,
 }
 
-impl RabbitService for PostAverageConsumer {
-    fn process_message(
-        &mut self,
-        message: Message,
-    ) -> Option<Message> {
+impl MessageProcessor for PostAverageConsumer {
+    type State = f32;
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostScoreMean(mean) => {
                 self.score_average = Some(mean);

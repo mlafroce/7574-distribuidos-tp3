@@ -1,12 +1,11 @@
-use amiquip::{ConsumerMessage, Result};
+use amiquip::Result;
 use log::{debug, error, info, warn};
-use tp2::middleware::connection::RabbitConnection;
+use tp2::messages::Message;
+use tp2::middleware::message_processor::MessageProcessor;
 use tp2::middleware::service::{init, RabbitService};
 use tp2::middleware::RabbitExchange;
-use tp2::messages::{BestMeme, Message};
 use tp2::{
-    Config, DATA_TO_SAVE_QUEUE_NAME, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME,
-    RESULTS_QUEUE_NAME,
+    Config, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME, RESULTS_QUEUE_NAME,
 };
 
 fn main() -> Result<()> {
@@ -16,13 +15,15 @@ fn main() -> Result<()> {
 
 fn run_service(config: Config) -> Result<()> {
     info!("Getting best meme id");
-    let mut id_service = BestMemeIdConsumer::default();
-    id_service.run_once(config.clone(), POST_SENTIMENT_MEAN_QUEUE_NAME, None)?;
-    info!("Got sentiment {:?}", id_service.best_meme_id_sentiment);
-    let best_meme_id = id_service.best_meme_id_sentiment.0;
+    let mut id_processor = BestMemeIdConsumer::default();
+    let mut service = RabbitService::new(config.clone(), &mut id_processor);
+    service.run_once(POST_SENTIMENT_MEAN_QUEUE_NAME, None)?;
+    info!("Got sentiment {:?}", id_processor.best_meme_id_sentiment);
+    let best_meme_id = id_processor.best_meme_id_sentiment.0;
     info!("Getting best meme");
-    let mut service = BestMemeFilter::new(best_meme_id);
-    service.run(config, POST_EXTRACTED_URL_QUEUE_NAME, None)
+    let mut processor = BestMemeFilter::new(best_meme_id);
+    let mut service = RabbitService::new(config, &mut processor);
+    service.run(POST_EXTRACTED_URL_QUEUE_NAME, None)
 }
 
 struct BestMemeFilter {
@@ -39,7 +40,8 @@ impl BestMemeFilter {
     }
 }
 
-impl RabbitService for BestMemeFilter {
+impl MessageProcessor for BestMemeFilter {
+    type State = ();
     fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostUrl(id, url) => {
@@ -56,10 +58,17 @@ impl RabbitService for BestMemeFilter {
 
     fn on_stream_finished(&self) -> Option<Message> {
         debug!("Sending best meme url: {}", self.best_meme_url);
-        Some(Message::PostUrl(self.best_meme_id.clone(), self.best_meme_url.clone()))
+        Some(Message::PostUrl(
+            self.best_meme_id.clone(),
+            self.best_meme_url.clone(),
+        ))
     }
 
-    fn send_process_output<E: RabbitExchange>(&self, exchange: &mut E, message: Message) -> Result<()> {
+    fn send_process_output<E: RabbitExchange>(
+        &self,
+        exchange: &mut E,
+        message: Message,
+    ) -> Result<()> {
         exchange.send_with_key(&message, RESULTS_QUEUE_NAME)
     }
 }
@@ -72,15 +81,16 @@ struct BestMemeIdConsumer {
 impl Default for BestMemeIdConsumer {
     fn default() -> Self {
         let best_meme_id_sentiment = ("".to_string(), f32::MIN);
-        Self { best_meme_id_sentiment }
+        Self {
+            best_meme_id_sentiment,
+        }
     }
 }
 
-impl RabbitService for BestMemeIdConsumer {
-    fn process_message(
-        &mut self,
-        message: Message,
-    ) -> Option<Message> {
+impl MessageProcessor for BestMemeIdConsumer {
+    type State = ();
+
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostIdSentiment(id, sentiment) => {
                 if sentiment > self.best_meme_id_sentiment.1 {

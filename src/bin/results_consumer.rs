@@ -2,10 +2,10 @@ use amiquip::{Connection, ConsumerOptions, QueueDeclareOptions, Result};
 use log::{debug, error, info};
 use std::io::Write;
 use tp2::messages::Message;
-use tp2::middleware::service::{init};
-use tp2::{Config, RESULTS_QUEUE_NAME};
 use tp2::middleware::buf_consumer::BufConsumer;
 use tp2::middleware::consumer::DeliveryConsumer;
+use tp2::middleware::service::init;
+use tp2::{Config, RESULTS_QUEUE_NAME};
 
 const N_RESULTS: usize = 1;
 
@@ -47,7 +47,7 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
     let consumer = DeliveryConsumer::new(consumer);
     let buf_consumer = BufConsumer::new(consumer);
     info!("Starting iteration");
-    for (bulk, delivery) in  buf_consumer {
+    for (bulk, delivery) in buf_consumer {
         for message in bulk {
             match message {
                 Message::PostScoreMean(mean) => {

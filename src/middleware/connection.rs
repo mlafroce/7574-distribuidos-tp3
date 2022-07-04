@@ -75,7 +75,7 @@ impl<'a> BinaryExchange<'a> {
         producers: usize,
         consumers: usize,
     ) -> Self {
-        let output_key = output_key.unwrap_or("".to_owned());
+        let output_key = output_key.unwrap_or_default();
         let eos_message = Message::EndOfStream;
         let finished_producers = 0;
         Self {
@@ -108,7 +108,10 @@ impl RabbitExchange for BinaryExchange<'_> {
     /// Call when an end of stream arrives. If no producers are left, notify consumers about EOS
     /// Returns true if finished, false otherwise
     fn end_of_stream(&mut self) -> Result<bool> {
-        info!("Called end_of_stream with {} producers, {} consumers", self.producers, self.consumers);
+        info!(
+            "Called end_of_stream with {} producers, {} consumers",
+            self.producers, self.consumers
+        );
         match self.finished_producers.cmp(&(self.producers - 1)) {
             Ordering::Less => {
                 self.finished_producers += 1;

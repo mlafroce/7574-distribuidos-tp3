@@ -1,8 +1,8 @@
 use amiquip::Result;
 use log::warn;
 use tp2::messages::Message;
+use tp2::middleware::message_processor::MessageProcessor;
 use tp2::middleware::service::{init, RabbitService};
-use tp2::middleware::RabbitExchange;
 use tp2::{Config, POST_SCORES_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME};
 
 fn main() -> Result<()> {
@@ -12,15 +12,11 @@ fn main() -> Result<()> {
 
 struct ScoreExtractor;
 
-impl RabbitService for ScoreExtractor {
-    fn process_message(
-        &mut self,
-        message: Message,
-    ) -> Option<Message> {
+impl MessageProcessor for ScoreExtractor {
+    type State = ();
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
-            Message::FullPost(post) => {
-                Some(Message::PostScore(post.score))
-            }
+            Message::FullPost(post) => Some(Message::PostScore(post.score)),
             _ => {
                 warn!("Invalid message arrived: {:?}", message);
                 None
@@ -30,9 +26,9 @@ impl RabbitService for ScoreExtractor {
 }
 
 fn run_service(config: Config) -> Result<()> {
-    let mut service = ScoreExtractor;
+    let mut processor = ScoreExtractor;
+    let mut service = RabbitService::new(config, &mut processor);
     service.run(
-        config,
         POST_SCORES_QUEUE_NAME,
         Some(POST_SCORE_MEAN_QUEUE_NAME.to_owned()),
     )

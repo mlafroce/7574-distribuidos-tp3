@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use amiquip::Result;
 use tp2::messages::Message;
+use tp2::middleware::message_processor::MessageProcessor;
 use tp2::middleware::service::{init, RabbitService};
 use tp2::{Config, DATA_TO_SAVE_QUEUE_NAME};
 
@@ -27,7 +28,7 @@ struct PostSentimenCalculatorState {
 }
 
 struct PostSentimentFilterState {
-    posts_ids: HashSet<String>
+    posts_ids: HashSet<String>,
 }
 
 #[derive(Default)]
@@ -50,10 +51,11 @@ struct Saver {
     post_average_filter_state: PostAverageFilterState,
     post_college_filter_state: PostCollegeFilterState,
     post_sentiment_calculator_state: PostSentimenCalculatorState,
-    post_sentiment_filter_state: PostSentimentFilterState
+    post_sentiment_filter_state: PostSentimentFilterState,
 }
 
-impl RabbitService for Saver {
+impl MessageProcessor for Saver {
+    type State = ();
     fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::DataScore(value) => {
@@ -112,7 +114,7 @@ fn main() -> Result<()> {
 }
 
 fn run_service(config: Config) -> Result<()> {
-    let mut service = Saver {
+    let mut processor = Saver {
         data: HashMap::new(),
         mean_calculator_state: MeanCalculatorState {
             score: Score { sum: 0, count: 0 },
@@ -129,9 +131,9 @@ fn run_service(config: Config) -> Result<()> {
             posts_sentiment: HashMap::new(),
         },
         post_sentiment_filter_state: PostSentimentFilterState {
-            posts_ids: HashSet::new()
-        }
+            posts_ids: HashSet::new(),
+        },
     };
-
-    service.run(config, DATA_TO_SAVE_QUEUE_NAME, None)
+    let mut service = RabbitService::new(config, &mut processor);
+    service.run(DATA_TO_SAVE_QUEUE_NAME, None)
 }

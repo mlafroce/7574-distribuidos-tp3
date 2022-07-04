@@ -5,20 +5,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Score {
     pub sum: u32,
-    pub count: u32
+    pub count: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PostSentiment {
     pub post_id: String,
     pub sentiment: f32,
-    pub count: i32
+    pub count: i32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BestMeme {
     pub id: String,
-    pub url: String
+    pub url: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -41,7 +41,7 @@ pub enum Message {
     DataScoreAverage(f32),
     DataPostIdCollege(String),
     DataPostId(String),
-    DataReset(String)
+    DataReset(String),
 }
 
 #[derive(Default, Debug)]

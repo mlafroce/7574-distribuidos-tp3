@@ -1,6 +1,6 @@
 use crate::messages::Message;
-use amiquip::{Delivery};
 use crate::middleware::consumer::DeliveryConsumer;
+use amiquip::Delivery;
 
 // TODO:  Crear clase StatefulConsumer
 
@@ -10,9 +10,7 @@ pub struct BufConsumer<'a> {
 
 impl<'a> BufConsumer<'a> {
     pub fn new(consumer: DeliveryConsumer<'a>) -> Self {
-        Self {
-            consumer,
-        }
+        Self { consumer }
     }
 
     fn recv_messages(&mut self) -> Option<(Vec<Message>, Delivery)> {

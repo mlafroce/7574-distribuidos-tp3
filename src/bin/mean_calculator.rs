@@ -1,12 +1,10 @@
 use amiquip::Result;
 use log::{info, warn};
+use tp2::messages::Message;
+use tp2::middleware::message_processor::MessageProcessor;
 use tp2::middleware::service::{init, RabbitService};
 use tp2::middleware::RabbitExchange;
-use tp2::messages::{Message, Score};
-use tp2::{
-    Config, DATA_TO_SAVE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME,
-    RESULTS_QUEUE_NAME,
-};
+use tp2::{Config, POST_SCORE_AVERAGE_QUEUE_NAME, POST_SCORE_MEAN_QUEUE_NAME, RESULTS_QUEUE_NAME};
 
 fn main() -> Result<()> {
     let env_config = init();
@@ -14,8 +12,9 @@ fn main() -> Result<()> {
 }
 
 fn run_service(config: Config) -> Result<()> {
-    let mut service = MeanCalculator::default();
-    service.run(config, POST_SCORE_MEAN_QUEUE_NAME, None)
+    let mut processor = MeanCalculator::default();
+    let mut service = RabbitService::new(config, &mut processor);
+    service.run(POST_SCORE_MEAN_QUEUE_NAME, None)
 }
 
 #[derive(Default)]
@@ -24,11 +23,9 @@ struct MeanCalculator {
     score_sum: u32,
 }
 
-impl RabbitService for MeanCalculator {
-    fn process_message(
-        &mut self,
-        message: Message
-    ) -> Option<Message> {
+impl MessageProcessor for MeanCalculator {
+    type State = (u32, u32);
+    fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostScore(score) => {
                 self.score_count += 1;
@@ -55,7 +52,11 @@ impl RabbitService for MeanCalculator {
         Some(Message::PostScoreMean(mean))
     }
 
-    fn send_process_output<E: RabbitExchange>(&self, exchange: &mut E, message: Message) -> Result<()> {
+    fn send_process_output<E: RabbitExchange>(
+        &self,
+        exchange: &mut E,
+        message: Message,
+    ) -> Result<()> {
         exchange.send_with_key(&message, RESULTS_QUEUE_NAME)?;
         exchange.send_with_key(&message, POST_SCORE_AVERAGE_QUEUE_NAME)
     }

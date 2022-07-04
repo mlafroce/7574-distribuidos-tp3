@@ -2,11 +2,11 @@ use amiquip::{ExchangeType, Result};
 use log::info;
 use tp2::comment::CommentIterator;
 use tp2::messages::Message;
+use tp2::middleware::buf_exchange::BufExchange;
 use tp2::middleware::connection::{BinaryExchange, RabbitConnection};
 use tp2::middleware::service::init;
-use tp2::{Config, COMMENTS_SOURCE_EXCHANGE_NAME};
-use tp2::middleware::buf_exchange::BufExchange;
 use tp2::middleware::RabbitExchange;
+use tp2::{Config, COMMENTS_SOURCE_EXCHANGE_NAME};
 
 fn main() -> Result<()> {
     let env_config = init();
@@ -26,7 +26,7 @@ fn run_service(config: Config, comments_file: String) -> Result<()> {
         let exchange =
             connection.get_named_exchange(COMMENTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
         let bin_exchange = BinaryExchange::new(exchange, None, 1, consumers);
-        let mut exchange = BufExchange::new(bin_exchange,  None);
+        let mut exchange = BufExchange::new(bin_exchange);
         let comments = CommentIterator::from_file(&comments_file);
         info!("Iterating comments");
         let published = comments

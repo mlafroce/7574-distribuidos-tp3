@@ -1,8 +1,8 @@
+use crate::messages::BulkBuilder;
 use crate::middleware::connection::BinaryExchange;
 use crate::middleware::RabbitExchange;
 use amiquip::Result;
 use serde::Serialize;
-use crate::messages::BulkBuilder;
 
 const MAX_BUF_SIZE: usize = 1_000_000;
 
@@ -13,12 +13,8 @@ pub struct BufExchange<'a> {
 }
 
 impl<'a> BufExchange<'a> {
-    pub fn new(
-        exchange: BinaryExchange<'a>,
-        routing_key: Option<String>,
-    ) -> Self {
+    pub fn new(exchange: BinaryExchange<'a>) -> Self {
         let max_buf_size = MAX_BUF_SIZE;
-        let routing_key = routing_key.unwrap_or("".to_string());
         let bulk_builder = BulkBuilder::default();
         Self {
             exchange,
