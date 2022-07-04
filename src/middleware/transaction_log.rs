@@ -1,8 +1,9 @@
 use crate::messages::BulkBuilder;
 use serde::Serialize;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::Read;
+use std::io::{Read, Write};
+use log::info;
 
 #[derive(PartialEq)]
 pub enum Checkpoint<S: Serialize> {
@@ -17,12 +18,11 @@ pub struct TransactionLog {
 
 impl TransactionLog {
     pub fn new(path: &str) -> io::Result<Self> {
-        if let Ok(log) = File::open(path) {
-            Ok(Self{log})
-        } else {
-            let log = File::create(path)?;
-            Ok(Self{log})
-        }
+        let log = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(path)?;
+        Ok(Self { log })
     }
 
     pub fn load_state<S: Serialize>(
@@ -38,9 +38,11 @@ impl TransactionLog {
     }
 
     pub fn save_state<S: Serialize>(&mut self, state: S) -> io::Result<()> {
-        //serde_json::to_string(&state);
-        Ok(())
+        let state = serde_json::to_string(&state).unwrap();
+        info!("Saving {}", state);
+        self.log.write_all(state.as_bytes())
     }
+
     pub fn save_sent(&self) {}
     pub fn save_clean(&self) {}
 }

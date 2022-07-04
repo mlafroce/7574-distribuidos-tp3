@@ -60,4 +60,8 @@ impl MessageProcessor for MeanCalculator {
         exchange.send_with_key(&message, RESULTS_QUEUE_NAME)?;
         exchange.send_with_key(&message, POST_SCORE_AVERAGE_QUEUE_NAME)
     }
+
+    fn get_state(&self) -> Option<Self::State> {
+        Some((self.score_count, self.score_sum))
+    }
 }

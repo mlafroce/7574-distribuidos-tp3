@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use super::connection::{BinaryExchange, RabbitConnection};
 use crate::messages::{BulkBuilder, Message};
 use crate::middleware::buf_consumer::BufConsumer;
@@ -13,7 +12,6 @@ use lazy_static::lazy_static;
 use log::info;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use serde::Serialize;
 
 // global
 lazy_static! {
@@ -98,7 +96,9 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                             }
                         }
                     }
-                    self.transaction_log.save_state(0); //writeTransactionLog(State, "processed")
+                    if let Some(state) = self.message_processor.get_state() {
+                        self.transaction_log.save_state(state).unwrap(); //writeTransactionLog(State, "processed")
+                    }
                 }
                 if bulk_builder.size() > 0 {
                     let output = bulk_builder.build();

@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::messages::Message;
 use crate::middleware::RabbitExchange;
 use amiquip::Result;
@@ -5,7 +6,7 @@ use serde::Serialize;
 
 
 pub trait MessageProcessor {
-    type State: Serialize;
+    type State: Serialize + Debug;
 
     fn process_message(&mut self, message: Message) -> Option<Message>;
 
