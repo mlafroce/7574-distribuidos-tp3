@@ -7,6 +7,7 @@ pub mod middleware;
 pub mod post;
 pub mod health_checker;
 pub mod task_manager;
+pub mod leader_election;
 
 #[derive(Clone, Envconfig)]
 pub struct Config {
