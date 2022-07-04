@@ -88,20 +88,8 @@ services:
     networks:
       - tp3_net
 
-  comment_sentiment_extractor_1:
-    container_name: comment_sentiment_extractor_1
-    image: memes-nodes:latest
-    depends_on:
-      rabbitmq_config:
-        condition: service_completed_successfully
-    command: comment_sentiment_extractor
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-    networks:
-      - tp3_net
-
-  comment_sentiment_extractor_2:
-    container_name: comment_sentiment_extractor_2
+  comment_sentiment_extractor:
+    container_name: comment_sentiment_extractor
     image: memes-nodes:latest
     depends_on:
       rabbitmq_config:
