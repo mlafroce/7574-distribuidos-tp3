@@ -4,6 +4,7 @@ use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{Read, Write};
 use log::info;
+use serde_json;
 
 #[derive(PartialEq)]
 pub enum Checkpoint<S: Serialize> {
