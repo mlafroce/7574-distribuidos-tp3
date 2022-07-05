@@ -32,6 +32,7 @@ impl TaskManager {
     }
 
     pub fn run(&mut self) {
+        println!("Started task_manager for service {}", self.service);
         let health_checker = HealthChecker::new(&format!("{}:{}", self.service, self.service_port), self.sec_between_requests, self.timeout_sec);
         health_checker.run(self);
         println!("Finished run_health_checker. Task manager {}", self.service);
@@ -44,7 +45,10 @@ impl TaskManager {
 
     pub fn shutdown_service(&mut self) {
         println!("Task manager shutdown_service for service: {}", self.service);
-        Command::new("docker").arg("stop").arg(self.service.clone()).spawn().expect(&format!("Failed to start service {}", self.service.clone()));
+        Command::new("docker").arg("stop").arg(self.service.clone()).spawn()
+            .expect(&format!("Failed to initiate shutdown on service {}", self.service.clone()))
+            .wait()
+            .expect(&format!("Failed to shutdown service {}", self.service.clone()));
     }
 }
 
@@ -81,6 +85,6 @@ impl HealthCheckerHandler for TaskManager {
     }
 
     fn shutdown(&mut self) -> bool {
-        return self.received_end_from_client || (*self.shutdown).load(Ordering::Relaxed);
+        return self.received_end_from_client || self.shutdown.load(Ordering::Relaxed);
     }
 }

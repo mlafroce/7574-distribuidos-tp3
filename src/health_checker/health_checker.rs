@@ -30,6 +30,7 @@ impl HealthBase for HealthChecker {
             let stream_result = TcpStream::connect(self.address.clone());
             match stream_result {
                 Ok(mut stream) => {
+                    println!("Connected with address {}", self.address);
                     stream.set_read_timeout(Option::from(Duration::from_secs(self.timeout_sec))).expect("Failed trying to set read_timeout in run_health_checker");
                     stream.write_all(&[HealthMsg::Ping as u8]).expect("Failed to write first Ping in run_health_checker");
                     self.answer_health_messages(&stream, HealthMsg::Pong, HealthMsg::Ping, handler);

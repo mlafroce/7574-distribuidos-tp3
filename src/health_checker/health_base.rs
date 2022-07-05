@@ -13,10 +13,12 @@ pub trait HealthBase {
                               handler: &mut dyn HealthCheckerHandler) {
         let mut stop_answering = false;
         while !stop_answering && !handler.shutdown() {
-            let mut reader = BufReader::new(stream.try_clone().unwrap());
             let mut buffer: [u8; 1] = [0; 1];
-            match reader.read_exact(&mut buffer) {
+            match stream.read(&mut buffer) {
                 Ok(received) => {
+                    if received < 1 {
+                        continue;
+                    }
                     let health_msg_received = HealthMsg::try_from(buffer[0]).expect("Failed to convert u8 to health msg");
                     if health_msg_received == expected {
                         stream.write_all(&[answer as u8]).unwrap();
