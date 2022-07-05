@@ -40,7 +40,6 @@ impl TransactionLog {
 
     pub fn save_state<S: Serialize>(&mut self, state: S) -> io::Result<()> {
         let state = serde_json::to_string(&state).unwrap();
-        info!("Saving {}", state);
         self.log.write_all(state.as_bytes())
     }
 

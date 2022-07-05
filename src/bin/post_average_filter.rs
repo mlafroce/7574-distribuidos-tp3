@@ -3,16 +3,13 @@ use envconfig::Envconfig;
 use log::{info, warn};
 use tp2::messages::Message;
 use tp2::middleware::message_processor::MessageProcessor;
-use tp2::middleware::service::RabbitService;
+use tp2::middleware::service::{init, RabbitService};
 use tp2::{
     Config, POST_COLLEGE_QUEUE_NAME, POST_SCORE_AVERAGE_QUEUE_NAME, POST_URL_AVERAGE_QUEUE_NAME,
 };
 
 fn main() -> Result<()> {
-    let env_config = Config::init_from_env().unwrap();
-    println!("Setting logger level: {}", env_config.logging_level);
-    std::env::set_var("RUST_LOG", env_config.logging_level.clone());
-    env_logger::init();
+    let env_config = init();
     run_service(env_config)
 }
 
@@ -30,7 +27,7 @@ fn run_service(config: Config) -> Result<()> {
             Some(POST_URL_AVERAGE_QUEUE_NAME.to_string()),
         )
     } else {
-        // Graceful quit while getting score average
+        warn!("Couldn't pop score average");
         Ok(())
     }
 }
