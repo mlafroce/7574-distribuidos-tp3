@@ -17,11 +17,9 @@ pub trait HealthBase {
             let mut buffer: [u8; 1] = [0; 1];
             match reader.read_exact(&mut buffer) {
                 Ok(received) => {
-                    println!("Received msg: {}", buffer[0]);
                     let health_msg_received = HealthMsg::try_from(buffer[0]).expect("Failed to convert u8 to health msg");
                     if health_msg_received == expected {
                         stream.write_all(&[answer as u8]).unwrap();
-                        println!("Sent msg answer: {}", answer as u8);
                     } else if health_msg_received == HealthMsg::Exit {
                         println!("Exit received. Proceeding to shutdown");
                         handler.handle_exit_msg();
@@ -30,12 +28,10 @@ pub trait HealthBase {
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    println!("Received EOF");
                     handler.handle_connection_closed();
                     stop_answering = true;
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    println!("Timeout");
                     handler.handle_timeout();
                     stop_answering = true;
                 }

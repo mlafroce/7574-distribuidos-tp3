@@ -51,9 +51,11 @@ impl TaskManager {
 impl HealthCheckerHandler for TaskManager {
     fn handle_connection_closed(&mut self) {
         println!("Task manager handle_connection_closed for service: {}", self.service);
-        self.connection_retries = 0;
-        self.shutdown_service();
-        self.start_service();
+        if !self.received_end_from_client {
+            self.connection_retries = 0;
+            self.shutdown_service();
+            self.start_service();
+        }
     }
 
     fn handle_timeout(&mut self) {
