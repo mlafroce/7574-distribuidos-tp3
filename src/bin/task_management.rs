@@ -5,9 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::spawn;
 use signal_hook::{consts::SIGTERM, iterator::Signals};
-use crate::task_manager::task_manager::TaskManager;
-pub mod task_manager;
-pub mod health_checker;
+use tp2::task_manager::task_manager::TaskManager;
 
 fn main() {
     let config = TaskManagementConfig::init_from_env().expect("Failed to read env configuration");

@@ -1,4 +1,4 @@
-FROM rust
+FROM docker_install:latest
 
 RUN USER=root cargo new --bin tp2
 WORKDIR /tp2
