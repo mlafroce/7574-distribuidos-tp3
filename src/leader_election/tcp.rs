@@ -1,13 +1,12 @@
 use std::{net::{UdpSocket, TcpListener, TcpStream}, time::Duration, mem::size_of, sync::{Arc, RwLock}, collections::HashMap, thread};
+use super::{leader_election::{TIMEOUT, id_to_dataaddr, LeaderElection}, socket::Socket, vector::Vector};
 
-use super::{leader_election::{TEAM_MEMBERS, TIMEOUT, id_to_dataaddr, LeaderElection}, socket::Socket, vector::Vector};
-
-pub fn send_pong(socket: UdpSocket) {
+pub fn send_pong(socket: UdpSocket, n_members: usize) {
     let mut buf = [0; 4];
     socket
         .set_read_timeout(Some(Duration::from_secs(10)))
         .unwrap();
-    for _ in 0..(TEAM_MEMBERS - 1) {
+    for _ in 0..(n_members - 1) {
         if let Ok((_, from)) = socket.recv_from(&mut buf) {
             socket.send_to("PONG".as_bytes(), from).unwrap();
         }

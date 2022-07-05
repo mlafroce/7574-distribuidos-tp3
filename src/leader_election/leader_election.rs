@@ -8,7 +8,6 @@ use super::vector::Vector;
 
 pub const TIMEOUT: Duration = Duration::from_secs(20);
 const FIRST_LIDER: usize = 0;
-pub const TEAM_MEMBERS: usize = 4;
 pub const MEMBERS: [usize; 4] = [0, 1, 2, 3];
 
 pub fn id_to_dataaddr(process_id: usize) -> String {
@@ -21,15 +20,17 @@ pub struct LeaderElection {
     output: Vector<(usize, (usize, u8))>,
     leader_id: Arc<(Mutex<Option<usize>>, Condvar)>,
     got_ok: Arc<(Mutex<bool>, Condvar)>,
+    n_members: usize
 }
 
 impl LeaderElection {
-    pub fn new(id: usize, output: Vector<(usize, (usize, u8))>) -> LeaderElection {
+    pub fn new(id: usize, output: Vector<(usize, (usize, u8))>, n_members: usize) -> LeaderElection {
         LeaderElection {
             id: id,
             output: output,
             leader_id: Arc::new((Mutex::new(Some(FIRST_LIDER)), Condvar::new())),
             got_ok: Arc::new((Mutex::new(false), Condvar::new())),
+            n_members: n_members
         }
     }
 
@@ -39,6 +40,7 @@ impl LeaderElection {
             output: self.output.clone(),
             leader_id: self.leader_id.clone(),
             got_ok: self.got_ok.clone(),
+            n_members: self.n_members.clone()
         }
     }
 
@@ -60,7 +62,7 @@ impl LeaderElection {
                 }
             }
             b'C' => {
-                println!("received new coordinator {}", id_from);
+                println!("received new COORDINATOR {}", id_from);
                 *self.leader_id.0.lock().unwrap() = Some(id_from);
                 self.leader_id.1.notify_all();
             }
@@ -89,16 +91,19 @@ impl LeaderElection {
         println!("send election");
         match self.id {
             0 => {
-                self.output.push((1, (self.id, b'E')));
-                self.output.push((2, (self.id, b'E')));
-                self.output.push((3, (self.id, b'E')));
+                for id_peer in (0 + 1)..self.n_members {
+                    self.output.push((id_peer, (self.id, b'E')));
+                } 
             }
             1 => {
-                self.output.push((2, (self.id, b'E')));
-                self.output.push((3, (self.id, b'E')));
+                for id_peer in (1 + 1)..self.n_members {
+                    self.output.push((id_peer, (self.id, b'E')));
+                }
             }
             2 => {
-                self.output.push((3, (self.id, b'E')));
+                for id_peer in (2 + 1)..self.n_members {
+                    self.output.push((id_peer, (self.id, b'E')));
+                }
             }
             _ => {}
         }

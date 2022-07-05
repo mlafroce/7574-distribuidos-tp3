@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::net::UdpSocket;
 use envconfig::Envconfig;
-use log::info;
 use tp2::leader_election::leader_election::{id_to_dataaddr, LeaderElection};
 use tp2::leader_election::tcp::{process_output, process_input, tcp_connect, tcp_listen, send_pong, send_ping};
 use tp2::leader_election::vector::Vector;
@@ -14,6 +13,8 @@ use std::sync::{Arc, RwLock};
 use std::thread::spawn;
 use signal_hook::{consts::SIGTERM, iterator::Signals};
 use tp2::task_manager::task_manager::TaskManager;
+
+pub const N_MEMBERS: usize = 4;
 
 fn main() {
     let config = TaskManagementConfig::init_from_env().expect("Failed to read env configuration");
@@ -36,7 +37,7 @@ fn main() {
     let sockets_lock_clone_2 = sockets_lock.clone();
     let mut input_clone = input.clone();
     let ouput_clone = output.clone();
-    let mut election = LeaderElection::new(process_id, output);
+    let mut election = LeaderElection::new(process_id, output, N_MEMBERS);
     let election_clone = election.clone();
     input_clone = input.clone();
     thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone));
@@ -55,7 +56,7 @@ fn main() {
                 thread::spawn(move || task_management_clone.run());
                 task_management_clone = task_management.clone()
             }
-            send_pong(socket.try_clone().unwrap());
+            send_pong(socket.try_clone().unwrap(), N_MEMBERS);
         } else {
             println!("not leader");
             if let Err(_) = send_ping(&socket, election.get_leader_id()) {
