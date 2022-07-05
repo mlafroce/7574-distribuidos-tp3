@@ -183,8 +183,8 @@ services:
     networks:
       - tp3_net
 
-  task_management1:
-    container_name: task_management1
+  task_management_0:
+    container_name: task_management_0
     image: memes-nodes:latest
     depends_on:
       rabbitmq_config:
@@ -195,6 +195,45 @@ services:
       - SERVICE_PORT=6789
       - TIMEOUT_SEC=80
       - SEC_BETWEEN_REQUESTS=5
+      - PROCESS_ID=0
+    volumes:
+      - ./services.txt:/tp2/services.txt
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - tp3_net
+
+  task_management_1:
+    container_name: task_management_1
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: task_management
+    environment:
+      - SERVICE_LIST_FILE=services.txt
+      - SERVICE_PORT=6789
+      - TIMEOUT_SEC=80
+      - SEC_BETWEEN_REQUESTS=5
+      - PROCESS_ID=1
+    volumes:
+      - ./services.txt:/tp2/services.txt
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - tp3_net
+  
+  task_management_2:
+    container_name: task_management_2
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: task_management
+    environment:
+      - SERVICE_LIST_FILE=services.txt
+      - SERVICE_PORT=6789
+      - TIMEOUT_SEC=80
+      - SEC_BETWEEN_REQUESTS=5
+      - PROCESS_ID=2
     volumes:
       - ./services.txt:/tp2/services.txt
       - /var/run/docker.sock:/var/run/docker.sock
