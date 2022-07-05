@@ -7,6 +7,13 @@ use tp2::middleware::connection::{BinaryExchange, RabbitConnection};
 use tp2::middleware::RabbitExchange;
 use tp2::post::PostIterator;
 use tp2::{Config, POSTS_SOURCE_EXCHANGE_NAME};
+use tp2::health_checker::health_answerer::HealthAnswerer;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use tp2::health_checker::health_base::HealthBase;
+use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
+
 
 fn main() -> Result<()> {
     let env_config = Config::init_from_env().unwrap();
@@ -14,7 +21,14 @@ fn main() -> Result<()> {
     std::env::set_var("RUST_LOG", env_config.logging_level.clone());
     env_logger::init();
     let posts_file = envconfig::load_var_with_default("POSTS_FILE", None, "").unwrap();
-    run_service(env_config, posts_file)
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
+    let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
+    let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
+    run_service(env_config, posts_file)?;
+    shutdown.store(true, Ordering::Relaxed);
+    health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+    Ok(())
 }
 
 fn run_service(config: Config, posts_file: String) -> Result<()> {

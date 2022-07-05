@@ -7,10 +7,23 @@ use tp2::middleware::RabbitExchange;
 use tp2::{
     Config, POST_EXTRACTED_URL_QUEUE_NAME, POST_SENTIMENT_MEAN_QUEUE_NAME, RESULTS_QUEUE_NAME,
 };
+use tp2::health_checker::health_answerer::HealthAnswerer;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
+use tp2::health_checker::health_base::HealthBase;
 
 fn main() -> Result<()> {
     let env_config = init();
-    run_service(env_config)
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
+    let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
+    let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
+    run_service(env_config)?;
+    shutdown.store(true, Ordering::Relaxed);
+    health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+    Ok(())
 }
 
 fn run_service(config: Config) -> Result<()> {

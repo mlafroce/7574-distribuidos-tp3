@@ -6,6 +6,12 @@ use tp2::middleware::buf_consumer::BufConsumer;
 use tp2::middleware::consumer::DeliveryConsumer;
 use tp2::middleware::service::init;
 use tp2::{Config, RESULTS_QUEUE_NAME};
+use tp2::health_checker::health_answerer::HealthAnswerer;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use tp2::health_checker::health_base::HealthBase;
+use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
 
 const N_RESULTS: usize = 1;
 
@@ -13,7 +19,14 @@ fn main() -> Result<()> {
     let env_config = init();
     let output_path =
         envconfig::load_var_with_default("OUTPUT_PATH", None, "data/output.txt").unwrap();
-    run_service(env_config, output_path)
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
+    let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
+    let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
+    run_service(env_config, output_path)?;
+    shutdown.store(true, Ordering::Relaxed);
+    health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+    Ok(())
 }
 
 #[derive(Debug, Default)]

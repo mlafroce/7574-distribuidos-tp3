@@ -7,6 +7,12 @@ use tp2::middleware::connection::{BinaryExchange, RabbitConnection};
 use tp2::middleware::service::init;
 use tp2::middleware::RabbitExchange;
 use tp2::{Config, COMMENTS_SOURCE_EXCHANGE_NAME};
+use tp2::health_checker::health_answerer::HealthAnswerer;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use tp2::health_checker::health_base::HealthBase;
+use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
 
 fn main() -> Result<()> {
     let env_config = init();
@@ -16,7 +22,14 @@ fn main() -> Result<()> {
         "data/the-reddit-irl-dataset-comments.csv",
     )
     .unwrap();
-    run_service(env_config, comments_file)
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
+    let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
+    let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
+    run_service(env_config, comments_file)?;
+    shutdown.store(true, Ordering::Relaxed);
+    health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+    Ok(())
 }
 
 fn run_service(config: Config, comments_file: String) -> Result<()> {

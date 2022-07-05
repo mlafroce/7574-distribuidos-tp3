@@ -9,13 +9,26 @@ use tp2::{
     Config, FILTERED_POST_ID_SENTIMENT_QUEUE_NAME, POST_ID_SENTIMENT_QUEUE_NAME,
     POST_ID_WITH_URL_QUEUE_NAME,
 };
+use tp2::health_checker::health_answerer::HealthAnswerer;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use tp2::health_checker::health_base::HealthBase;
+use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
 
 fn main() -> Result<()> {
     let env_config = Config::init_from_env().unwrap();
     println!("Setting logger level: {}", env_config.logging_level);
     std::env::set_var("RUST_LOG", env_config.logging_level.clone());
     env_logger::init();
-    run_service(env_config)
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
+    let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
+    let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
+    run_service(env_config)?;
+    shutdown.store(true, Ordering::Relaxed);
+    health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+    Ok(())
 }
 
 fn run_service(config: Config) -> Result<()> {
