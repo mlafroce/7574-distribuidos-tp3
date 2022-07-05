@@ -39,11 +39,9 @@ fn main() {
     let mut election = LeaderElection::new(process_id, output);
     let election_clone = election.clone();
     input_clone = input.clone();
-    println!("antes del connect");
     thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone));
     input_clone = input.clone();
     tcp_connect(process_id, input_clone, sockets_lock);
-    println!("despues del connect");
     thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_2));
     thread::spawn(move || process_input(election_clone, input));
     // End Leader
