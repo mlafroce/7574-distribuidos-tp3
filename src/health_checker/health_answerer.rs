@@ -30,9 +30,6 @@ impl HealthAnswerer {
 impl HealthBase for HealthAnswerer {
     fn run(&self, handler: &mut dyn HealthCheckerHandler) {
         for stream in self.listener.incoming() {
-            if self.shutdown.load(Ordering::Relaxed) {
-                break;
-            }
             match stream {
                 Ok(mut stream) => {
                     println!("Received new client");
@@ -45,7 +42,9 @@ impl HealthBase for HealthAnswerer {
                 }
                 Err(e) => panic!("Unknown error while receiving clients: {}", e),
             }
-
+            if self.shutdown.load(Ordering::Relaxed) {
+                break;
+            }
         }
     }
 
