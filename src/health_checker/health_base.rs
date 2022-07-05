@@ -17,19 +17,25 @@ pub trait HealthBase {
             match stream.read(&mut buffer) {
                 Ok(received) => {
                     if received < 1 {
-                        continue;
-                    }
-                    let health_msg_received = HealthMsg::try_from(buffer[0]).expect("Failed to convert u8 to health msg");
-                    if health_msg_received == expected {
-                        stream.write_all(&[answer as u8]).unwrap();
-                    } else if health_msg_received == HealthMsg::Exit {
-                        println!("Exit received. Proceeding to shutdown");
-                        handler.handle_exit_msg();
+                        println!("Received EOF");
+                        handler.handle_connection_closed();
+                        stop_answering = true;
                     } else {
-                        panic!("Received non expected HealthMsg: {:?}, wanted: {:?}", received, answer as u8);
+                        let health_msg_received = HealthMsg::try_from(buffer[0]).expect("Failed to convert u8 to health msg");
+                        if health_msg_received == expected {
+                            stream.write_all(&[answer as u8]).unwrap();
+                        } else if health_msg_received == HealthMsg::Exit {
+                            println!("Exit received. Proceeding to shutdown");
+                            handler.handle_exit_msg();
+                        } else {
+                            panic!("Received non expected HealthMsg: {:?}, wanted: {:?}", received, answer as u8);
+                        }
                     }
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                } Err(ref e) if e.kind() == std::io::ErrorKind::ConnectionReset => {
+                    println!("Connection reset by peer");
+                    handler.handle_connection_closed();
+                    stop_answering = true;
+                } Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     handler.handle_connection_closed();
                     stop_answering = true;
                 }
