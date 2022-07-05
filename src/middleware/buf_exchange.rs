@@ -1,4 +1,4 @@
-use crate::messages::BulkBuilder;
+use crate::messages::{BulkBuilder, Message};
 use crate::middleware::connection::BinaryExchange;
 use crate::middleware::RabbitExchange;
 use amiquip::Result;
@@ -26,7 +26,8 @@ impl<'a> BufExchange<'a> {
     pub fn flush(&mut self) -> Result<()> {
         if self.bulk_builder.size() > 0 {
             let msg = self.bulk_builder.build();
-            self.exchange.send(&msg)
+            self.exchange.send(&msg)?;
+            self.exchange.send(&Message::Confirmed)
         } else {
             Ok(())
         }

@@ -122,6 +122,7 @@ impl RabbitExchange for BinaryExchange<'_> {
                 info!("Sending {} EOS", self.consumers);
                 for _ in 0..self.consumers {
                     self.send(&self.eos_message.clone())?;
+                    self.send(&Message::Confirmed)?;
                 }
                 Ok(true)
             }
