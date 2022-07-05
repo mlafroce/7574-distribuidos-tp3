@@ -66,7 +66,7 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
 
             let mut stream_finished = run_once;
             let first_run = true;
-            for (bulk, delivery) in buf_consumer {
+            for compound_delivery in buf_consumer {
                 let mut checkpoint = Checkpoint::<u32>::Clean;
                 let mut bulk_builder = BulkBuilder::default();
 
@@ -74,7 +74,7 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                     //checkpoint = self.transaction_log.load_state(&bulk_builder).unwrap();
                 }
                 if checkpoint == Checkpoint::Clean {
-                    for message in bulk {
+                    for message in compound_delivery.data {
                         match message {
                             Message::EndOfStream => {
                                 stream_finished = exchange.end_of_stream()?;
@@ -104,10 +104,12 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                     let output = bulk_builder.build();
                     self.message_processor
                         .send_process_output(&mut exchange, output)?;
+                    self.transaction_log.save_sent();
+                    exchange.send(&Message::Confirmed);
+                    //self.transaction_log.save_confirmed();
                 }
-                //self.transaction_log.save_sent();
-                //self.transaction_log.save_confirmed();
-                delivery.ack(channel)?;
+                compound_delivery.msg_delivery.ack(channel)?;
+                compound_delivery.confirm_delivery.ack(channel)?;
                 //self.transaction_log.save_clean();
                 if stream_finished {
                     break;

@@ -34,14 +34,7 @@ pub enum Message {
     CollegePostUrl(String),
     DataToSave(String, String),
     BulkMessage(Vec<u8>, Vec<usize>),
-
-    DataScore(Score),
-    DataPostSentiment(PostSentiment),
-    DataBestMeme(BestMeme),
-    DataScoreAverage(f32),
-    DataPostIdCollege(String),
-    DataPostId(String),
-    DataReset(String),
+    Confirmed
 }
 
 #[derive(Default, Debug)]

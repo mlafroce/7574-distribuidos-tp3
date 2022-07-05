@@ -43,14 +43,6 @@ impl MessageProcessor for MeanCalculator {
             Message::PostScore(score) => {
                 self.score_count += 1;
                 self.score_sum += score;
-                /* Persist State
-                let msg =
-                    Message::DataScore(Score {
-                        sum: self.score_sum,
-                        count: self.score_count
-                    });
-                exchange.send_with_key(&msg, DATA_TO_SAVE_QUEUE_NAME)?;
-                 */
             }
             _ => {
                 warn!("Invalid message arrived");
@@ -71,7 +63,9 @@ impl MessageProcessor for MeanCalculator {
         message: Message,
     ) -> Result<()> {
         exchange.send_with_key(&message, RESULTS_QUEUE_NAME)?;
-        exchange.send_with_key(&message, POST_SCORE_AVERAGE_QUEUE_NAME)
+        exchange.send_with_key(&Message::Confirmed, RESULTS_QUEUE_NAME)?;
+        exchange.send_with_key(&message, POST_SCORE_AVERAGE_QUEUE_NAME)?;
+        exchange.send_with_key(&Message::Confirmed, POST_SCORE_AVERAGE_QUEUE_NAME)
     }
 
     fn get_state(&self) -> Option<Self::State> {
