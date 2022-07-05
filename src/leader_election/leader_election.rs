@@ -89,23 +89,8 @@ impl LeaderElection {
     // send msg ELECTION to all process with a greater id
     fn send_election(&mut self) {
         println!("send election");
-        match self.id {
-            0 => {
-                for id_peer in (0 + 1)..self.n_members {
-                    self.output.push((id_peer, (self.id, b'E')));
-                } 
-            }
-            1 => {
-                for id_peer in (1 + 1)..self.n_members {
-                    self.output.push((id_peer, (self.id, b'E')));
-                }
-            }
-            2 => {
-                for id_peer in (2 + 1)..self.n_members {
-                    self.output.push((id_peer, (self.id, b'E')));
-                }
-            }
-            _ => {}
+        for id_peer in (self.id + 1)..self.n_members {
+            self.output.push((id_peer, (self.id, b'E')));
         }
     }
 
