@@ -41,7 +41,9 @@ impl MessageProcessor for UrlExtractor {
         message: Message,
     ) -> Result<()> {
         exchange.send_with_key(&message, POST_EXTRACTED_URL_QUEUE_NAME)?;
-        exchange.send_with_key(&message, POST_ID_WITH_URL_QUEUE_NAME)
+        exchange.send_with_key(&Message::Confirmed, POST_EXTRACTED_URL_QUEUE_NAME)?;
+        exchange.send_with_key(&message, POST_ID_WITH_URL_QUEUE_NAME)?;
+        exchange.send_with_key(&Message::Confirmed, POST_ID_WITH_URL_QUEUE_NAME)
     }
 }
 

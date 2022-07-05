@@ -47,8 +47,8 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
     let consumer = DeliveryConsumer::new(consumer);
     let buf_consumer = BufConsumer::new(consumer);
     info!("Starting iteration");
-    for (bulk, delivery) in buf_consumer {
-        for message in bulk {
+    for compound_delivery in buf_consumer {
+        for message in compound_delivery.data {
             match message {
                 Message::PostScoreMean(mean) => {
                     info!("got mean: {:?}", mean);
@@ -70,12 +70,14 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
                         data_received.2 = true;
                     }
                 }
+                Message::Confirmed  => {}
                 _ => {
                     error!("Invalid message arrived {:?}", message);
                 }
             }
         }
-        delivery.ack(&channel)?;
+        compound_delivery.msg_delivery.ack(&channel)?;
+        compound_delivery.confirm_delivery.ack(&channel)?;
         if data_received.0 && data_received.1 && data_received.2 {
             break;
         }

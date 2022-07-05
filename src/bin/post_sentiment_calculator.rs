@@ -50,7 +50,8 @@ impl MessageProcessor for PostSentimentCalculator {
         exchange: &mut E,
         message: Message,
     ) -> Result<()> {
-        exchange.send_with_key(&message, POST_SENTIMENT_MEAN_QUEUE_NAME)
+        exchange.send_with_key(&message, POST_SENTIMENT_MEAN_QUEUE_NAME)?;
+        exchange.send_with_key(&Message::Confirmed, POST_SENTIMENT_MEAN_QUEUE_NAME)
     }
 }
 

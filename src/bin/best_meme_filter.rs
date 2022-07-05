@@ -69,7 +69,9 @@ impl MessageProcessor for BestMemeFilter {
         exchange: &mut E,
         message: Message,
     ) -> Result<()> {
-        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)
+        exchange.send_with_key(&message, RESULTS_QUEUE_NAME)?;
+        exchange.send_with_key(&Message::Confirmed, RESULTS_QUEUE_NAME)
+
     }
 }
 // Should I use a heap of best memes ids in case the best one is missing?
