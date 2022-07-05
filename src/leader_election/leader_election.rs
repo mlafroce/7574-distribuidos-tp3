@@ -4,8 +4,6 @@ use std::{
     time::Duration,
 };
 
-use log::info;
-
 use super::vector::Vector;
 
 pub const TIMEOUT: Duration = Duration::from_secs(20);
@@ -88,7 +86,7 @@ impl LeaderElection {
 
     // send msg ELECTION to all process with a greater id
     fn send_election(&mut self) {
-        info!("send election");
+        println!("send election");
         match self.id {
             0 => {
                 self.output.push((1, (self.id, b'E')));
@@ -107,7 +105,7 @@ impl LeaderElection {
     }
 
     pub fn find_new(&mut self) {
-        info!("[{}] searching lider", self.id);
+        println!("[{}] searching lider", self.id);
         *self.got_ok.0.lock().unwrap() = false;
         *self.leader_id.0.lock().unwrap() = None;
         self.send_election();
@@ -122,7 +120,7 @@ impl LeaderElection {
                     println!("[{}] any ok received", self.id);
 
                     // make me leader
-                    info!("iam the new lider");
+                    println!("iam the new lider");
 
                     self.output.push((0, (self.id, b'C')));
                     self.output.push((1, (self.id, b'C')));

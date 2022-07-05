@@ -1,8 +1,16 @@
+use std::collections::HashMap;
+use std::time::Duration;
+use std::{env, thread};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::net::UdpSocket;
 use envconfig::Envconfig;
+use log::info;
+use tp2::leader_election::leader_election::{id_to_dataaddr, LeaderElection};
+use tp2::leader_election::tcp::{process_output, process_input, tcp_connect, tcp_listen, send_pong, send_ping};
+use tp2::leader_election::vector::Vector;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::spawn;
 use signal_hook::{consts::SIGTERM, iterator::Signals};
 use tp2::task_manager::task_manager::TaskManager;
@@ -16,7 +24,49 @@ fn main() {
         .map(|l| l.expect("Could not parse line"))
         .collect();
     let task_management = TaskManagement::new(services, config.service_port, config.timeout_sec, config.sec_between_requests);
-    task_management.run();
+    let mut task_management_clone = task_management.clone();
+
+    // Begin Leader
+    let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
+    let socket = UdpSocket::bind(id_to_dataaddr(process_id)).unwrap();
+    let input: Vector<(usize, u8)> = Vector::new();
+    let output: Vector<(usize, (usize, u8))> = Vector::new();
+    let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
+    let sockets_lock_clone = sockets_lock.clone();
+    let sockets_lock_clone_2 = sockets_lock.clone();
+    let mut input_clone = input.clone();
+    let ouput_clone = output.clone();
+    let mut election = LeaderElection::new(process_id, output);
+    let election_clone = election.clone();
+    input_clone = input.clone();
+    println!("antes del connect");
+    thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone));
+    input_clone = input.clone();
+    tcp_connect(process_id, input_clone, sockets_lock);
+    println!("despues del connect");
+    thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_2));
+    thread::spawn(move || process_input(election_clone, input));
+    // End Leader
+
+    let mut running_service = false;
+    loop {
+        if election.am_i_leader() {
+            println!("leader");
+            if !running_service {
+                running_service = true;
+                thread::spawn(move || task_management_clone.run());
+                task_management_clone = task_management.clone()
+            }
+            send_pong(socket.try_clone().unwrap());
+        } else {
+            println!("not leader");
+            if let Err(_) = send_ping(&socket, election.get_leader_id()) {
+                election.find_new()
+            }
+        }
+        thread::sleep(Duration::from_secs(5));
+    }
+    
     println!("Exited gracefully");
 }
 
@@ -51,6 +101,16 @@ impl TaskManagement {
             timeout_sec,
             sec_between_requests,
             shutdown: Arc::new(AtomicBool::new(false))
+        }
+    }
+
+    pub fn clone(&self) -> TaskManagement {
+        TaskManagement {
+            services: self.services.clone(),
+            service_port: self.service_port.clone(),
+            timeout_sec: self.timeout_sec.clone(),
+            sec_between_requests: self.sec_between_requests.clone(),
+            shutdown: self.shutdown.clone()
         }
     }
 
