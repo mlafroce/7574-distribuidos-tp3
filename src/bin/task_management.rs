@@ -4,7 +4,6 @@ use std::{env, thread};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::net::UdpSocket;
-use env_logger::init;
 use envconfig::Envconfig;
 use log::info;
 use tp2::leader_election::leader_election::{id_to_dataaddr, LeaderElection};
@@ -17,8 +16,6 @@ use signal_hook::{consts::SIGTERM, iterator::Signals};
 use tp2::task_manager::task_manager::TaskManager;
 
 fn main() {
-    let env_config = init();
-    info!("task_management_0");
     let config = TaskManagementConfig::init_from_env().expect("Failed to read env configuration");
     let filename = config.service_list_file;
     let file = File::open(filename.clone()).expect(&format!("Failed to read file: {}", filename.clone()));
@@ -42,9 +39,11 @@ fn main() {
     let mut election = LeaderElection::new(process_id, output);
     let election_clone = election.clone();
     input_clone = input.clone();
+    println!("antes del connect");
     thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone));
     input_clone = input.clone();
     tcp_connect(process_id, input_clone, sockets_lock);
+    println!("despues del connect");
     thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_2));
     thread::spawn(move || process_input(election_clone, input));
     // End Leader
@@ -52,7 +51,7 @@ fn main() {
     let mut running_service = false;
     loop {
         if election.am_i_leader() {
-            info!("leader");
+            println!("leader");
             if !running_service {
                 running_service = true;
                 thread::spawn(move || task_management_clone.run());
@@ -60,7 +59,7 @@ fn main() {
             }
             send_pong(socket.try_clone().unwrap());
         } else {
-            info!("not leader");
+            println!("not leader");
             if let Err(_) = send_ping(&socket, election.get_leader_id()) {
                 election.find_new()
             }

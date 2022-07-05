@@ -1,7 +1,5 @@
 use std::{net::{UdpSocket, TcpListener, TcpStream}, time::Duration, mem::size_of, sync::{Arc, RwLock}, collections::HashMap, thread};
 
-use log::info;
-
 use super::{leader_election::{TEAM_MEMBERS, TIMEOUT, id_to_dataaddr, LeaderElection}, socket::Socket, vector::Vector};
 
 pub fn send_pong(socket: UdpSocket) {
@@ -57,7 +55,7 @@ fn receive(socket: &mut Socket) -> (u8, usize) {
 }   
 
 fn tcp_receive_messages(from_id: usize, socket: &mut Socket, input: Vector<(usize, u8)>) {
-    info!("receiving msgs | from: {}", from_id);
+    println!("receiving msgs | from: {}", from_id);
 
     loop {
         let msg = receive(socket);
@@ -71,7 +69,7 @@ pub fn tcp_listen(process_id: usize, vector: Vector<(usize, u8)>, sockets_lock: 
     let listener;
     match TcpListener::bind(format!("task_management_{}:{}", process_id, PORT)) {
         Ok(tcp_listener) => {
-            info!("server listening on port {}", PORT);
+            println!("server listening on port {}", PORT);
             listener = tcp_listener
         }
         Err(_) => panic!("could not start socket aceptor"),
@@ -110,7 +108,7 @@ pub fn tcp_connect(process_id: usize, input: Vector<(usize, u8)>, sockets_lock: 
         loop {
             if let Ok(stream) = TcpStream::connect(&format!("task_management_{}:{}", peer_id, PORT))
             {
-                info!("connected with {}", peer_id);
+                println!("connected with {}", peer_id);
                 let mut socket = Socket::new(stream.try_clone().unwrap());
                 let socket_clone = socket.clone();
                 if let Ok(mut sockets) = sockets_lock.write() {
