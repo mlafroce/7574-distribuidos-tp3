@@ -8,10 +8,6 @@ use std::{
     time::Duration,
 };
 
-pub fn id_to_dataaddr(process_id: usize) -> String {
-    format!("task_management_{}:1235", process_id)
-}
-
 pub fn is_leader_alive(
     leader_id: usize,
     sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>,
