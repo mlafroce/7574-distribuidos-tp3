@@ -2,15 +2,25 @@ use std::io;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::BufReader;
+use amiquip::{Connection, ConsumerOptions, QueueDeclareOptions, Result};
+use tp2::{Config, RESULTS_QUEUE_NAME};
+use tp2::middleware::buf_consumer::BufConsumer;
+use tp2::middleware::consumer::DeliveryConsumer;
+use tp2::messages::Message;
+use log::{debug, error, info};
 use envconfig::Envconfig;
 
-const READ_LOOP_SIZE: usize = 1000;
+const N_RESULTS: usize = 1;
 
 fn main() {
     println!("Server started");
+    let env_config = Config::init_from_env().unwrap();
+    println!("Setting logger level: {}", env_config.logging_level);
+    std::env::set_var("RUST_LOG", env_config.logging_level.clone());
+    env_logger::init();
     let config = ServerConfig::init_from_env().expect("Failed to read env configuration");
     let server = Server::new(config.chunk_size, config.server_address, config.posts_producer_address, config.comments_producer_address);
-    server.run();
+    server.run(&env_config);
 }
 
 pub struct Server {
@@ -33,12 +43,12 @@ impl Server {
         }
     }
 
-    pub fn run(&self) {
+    pub fn run(&self, config: &Config) {
         let listener = TcpListener::bind(self.server_address.clone()).expect(&*format!("Could not bind to address: {}", self.server_address));
         for client in listener.incoming() {
             match client {
                 Ok(mut stream) => {
-                    self.handle_client(&mut stream);
+                    self.handle_client(&mut stream, config);
                     let _ = stream.shutdown(Shutdown::Both);
                 }
                 Err(e) => {
@@ -48,7 +58,7 @@ impl Server {
         }
     }
 
-    fn handle_client(&self, stream: &mut TcpStream) {
+    fn handle_client(&self, stream: &mut TcpStream, config: &Config) {
         println!("Forwarding posts");
         match TcpStream::connect(self.posts_producer_address.clone()) {
             Ok(mut post_producer_stream) => {
@@ -71,6 +81,17 @@ impl Server {
             }
             Err(e) => {
                 panic!("Error while forwarding comments: {:?}", e)
+            }
+        }
+        match self.wait_for_results(config) {
+            Ok(results) => {
+                println!("Best meme received: {:?}", results.best_meme);
+                println!("Score mean received: {:?}", results.score_mean);
+                println!("College posts received: {:?}", results.college_posts.len());
+                // send_results
+            }
+            Err(e) => {
+                panic!("Error while waiting for results: {:?}", e);
             }
         }
         // En los errores segun cuales lleguen podemos contestarle que no estamos disponibles y
@@ -100,7 +121,7 @@ impl Server {
         Ok(())
     }
 
-    pub fn read_file_size(&self, stream: &mut TcpStream) -> io::Result<u64> {
+    fn read_file_size(&self, stream: &mut TcpStream) -> io::Result<u64> {
         let mut file_size_buff = [0u8; 8];
         let mut n_received = 0;
         loop {
@@ -113,7 +134,7 @@ impl Server {
         return Ok(u64::from_be_bytes(file_size_buff));
     }
 
-    pub fn read_chunk(&self, stream: &mut TcpStream, n: usize) -> io::Result<Vec<u8>> {
+    fn read_chunk(&self, stream: &mut TcpStream, n: usize) -> io::Result<Vec<u8>> {
         let mut received = vec![0; n];
         let mut n_received = 0;
         loop {
@@ -125,6 +146,68 @@ impl Server {
         }
         return Ok(received);
     }
+
+    fn wait_for_results(&self, config: &Config) -> Result<Results> {
+        let host_addr = format!(
+            "amqp://{}:{}@{}:{}",
+            config.user, config.pass, config.server_host, config.server_port
+        );
+        debug!("Connecting to: {}", host_addr);
+
+        let mut connection = Connection::insecure_open(&host_addr)?;
+        let channel = connection.open_channel(None)?;
+
+        let options = QueueDeclareOptions {
+            auto_delete: false,
+            ..QueueDeclareOptions::default()
+        };
+        let queue = channel.queue_declare(RESULTS_QUEUE_NAME, options)?;
+
+        // Query results
+        let mut count = 0;
+        let mut results = Results::default();
+        let mut data_received = (false, false, false);
+        let consumer = queue.consume(ConsumerOptions::default())?;
+        let consumer = DeliveryConsumer::new(consumer);
+        let buf_consumer = BufConsumer::new(consumer);
+        info!("Starting iteration");
+        for (bulk, delivery) in buf_consumer {
+            for message in bulk {
+                match message {
+                    Message::PostScoreMean(mean) => {
+                        info!("got mean: {:?}", mean);
+                        results.score_mean = mean;
+                        data_received.0 = true;
+                    }
+                    Message::PostUrl(id, url) => {
+                        info!("got best meme url: {:?}, {}", url, id);
+                        results.best_meme = url;
+                        data_received.1 = true;
+                    }
+                    Message::CollegePostUrl(url) => {
+                        results.college_posts.push(url);
+                    }
+                    Message::EndOfStream => {
+                        info!("College posts ended");
+                        count += 1;
+                        if count == N_RESULTS {
+                            data_received.2 = true;
+                        }
+                    }
+                    _ => {
+                        error!("Invalid message arrived {:?}", message);
+                    }
+                }
+            }
+            delivery.ack(&channel)?;
+            if data_received.0 && data_received.1 && data_received.2 {
+                break;
+            }
+        }
+        info!("Exit");
+        Ok(results)
+    }
+
 }
 
 #[derive(Clone, Envconfig)]
@@ -138,4 +221,11 @@ pub struct ServerConfig {
     pub posts_producer_address: String,
     #[envconfig(from = "COMMENTS_PRODUCER_ADDRESS", default = "")]
     pub comments_producer_address: String,
+}
+
+#[derive(Debug, Default)]
+struct Results {
+    best_meme: String,
+    score_mean: f32,
+    college_posts: Vec<String>,
 }

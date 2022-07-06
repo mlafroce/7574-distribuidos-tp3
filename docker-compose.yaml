@@ -18,21 +18,6 @@ services:
     networks:
       - tp3_net
 
-  results_consumer:
-    container_name: results_consumer
-    image: memes-nodes:latest
-    depends_on:
-      rabbitmq_config:
-        condition: service_completed_successfully
-    command: results_consumer
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OUTPUT_PATH=/var/data/output.txt
-    volumes:
-      - ${PWD}/data/output.txt:/var/data/output.txt
-    networks:
-      - tp3_net
-
   client:
     container_name: client
     image: memes-nodes:latest
