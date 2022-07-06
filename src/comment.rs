@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use log::debug;
 use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
-use std::fs::File;
+use std::net::TcpStream;
 
 const COLLEGE_WORDS: &str = "university|college|student|teacher|professor";
 const URL_PATTERN: &str = "https://old.reddit.com/r/meirl/comments/([^/]+)/meirl/.*";
@@ -58,15 +58,21 @@ impl Comment {
 }
 
 pub struct CommentIterator {
-    reader: Reader<File>,
+    reader: Reader<TcpStream>,
 }
 
 impl CommentIterator {
-    pub fn from_file(path: &str) -> Self {
-        let comment_file = File::open(path).unwrap();
+    // pub fn from_file(path: &str) -> Self {
+    //     let comment_file = File::open(path).unwrap();
+    //     let reader = ReaderBuilder::new()
+    //         .has_headers(true)
+    //         .from_reader(comment_file);
+    //     Self { reader }
+    // }
+    pub fn from_stream(stream: TcpStream) -> Self {
         let reader = ReaderBuilder::new()
             .has_headers(true)
-            .from_reader(comment_file);
+            .from_reader(stream); // TODO: --> Que pasa si se cae la conexion??
         Self { reader }
     }
 }

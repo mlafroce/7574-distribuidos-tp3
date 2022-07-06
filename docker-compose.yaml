@@ -33,6 +33,40 @@ services:
     networks:
       - tp3_net
 
+  client:
+    container_name: client
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: client
+    environment:
+      - POSTS_FILE=/var/data/the-reddit-irl-dataset-posts.csv
+      - COMMENTS_FILE=/var/data/the-reddit-irl-dataset-comments.csv
+      - CHUNK_SIZE=1000
+      - SERVER_ADDRESS=server:9090
+    volumes:
+      - ${PWD}/data/the-reddit-irl-dataset-posts.csv:/var/data/the-reddit-irl-dataset-posts.csv
+      - ${PWD}/data/the-reddit-irl-dataset-comments.csv:/var/data/the-reddit-irl-dataset-comments.csv
+    networks:
+      - tp3_net
+
+  server:
+    container_name: server
+    image: memes-nodes:latest
+    depends_on:
+      rabbitmq_config:
+        condition: service_completed_successfully
+    command: server
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - SERVER_ADDRESS=0.0.0.0:9090
+      - CHUNK_SIZE=1000
+      - POSTS_PRODUCER_ADDRESS=post_producer:9090
+      - COMMENTS_PRODUCER_ADDRESS=comment_producer:9090
+    networks:
+      - tp3_net
+
   post_producer:
     container_name: post_producer
     image: memes-nodes:latest
@@ -42,9 +76,6 @@ services:
     command: post_producer
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - POSTS_FILE=/var/data/the-reddit-irl-dataset-posts.csv
-    volumes:
-      - ${PWD}/data/the-reddit-irl-dataset-posts.csv:/var/data/the-reddit-irl-dataset-posts.csv
     networks:
       - tp3_net
 
@@ -57,9 +88,6 @@ services:
     command: comment_producer
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - COMMENTS_FILE=/var/data/the-reddit-irl-dataset-comments.csv
-    volumes:
-      - ${PWD}/data/the-reddit-irl-dataset-comments.csv:/var/data/the-reddit-irl-dataset-comments.csv
     networks:
       - tp3_net
 

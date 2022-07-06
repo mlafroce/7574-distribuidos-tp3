@@ -1,6 +1,6 @@
 use csv::{Reader, ReaderBuilder, StringRecord};
 use serde::{Deserialize, Serialize};
-use std::fs::File;
+use std::net::TcpStream;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Post {
@@ -30,15 +30,22 @@ impl Post {
 }
 
 pub struct PostIterator {
-    reader: Reader<File>,
+    reader: Reader<TcpStream>,
 }
 
 impl PostIterator {
-    pub fn from_file(path: &str) -> Self {
-        let post_file = File::open(path).unwrap();
+    // pub fn from_file(path: &str) -> Self {
+    //     let post_file = File::open(path).unwrap();
+    //     let reader = ReaderBuilder::new()
+    //         .has_headers(true)
+    //         .from_reader(post_file);
+    //     Self { reader }
+    // }
+
+    pub fn from_stream(stream: TcpStream) -> Self {
         let reader = ReaderBuilder::new()
             .has_headers(true)
-            .from_reader(post_file);
+            .from_reader(stream); // TODO: --> Que pasa si se cae la conexion??
         Self { reader }
     }
 }

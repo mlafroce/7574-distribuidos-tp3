@@ -1,3 +1,4 @@
+use std::net::TcpListener;
 use amiquip::{ExchangeType, Result};
 use envconfig::Envconfig;
 use log::info;
@@ -20,18 +21,17 @@ fn main() -> Result<()> {
     println!("Setting logger level: {}", env_config.logging_level);
     std::env::set_var("RUST_LOG", env_config.logging_level.clone());
     env_logger::init();
-    let posts_file = envconfig::load_var_with_default("POSTS_FILE", None, "").unwrap();
     let shutdown = Arc::new(AtomicBool::new(false));
     let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
     let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
     let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
-    run_service(env_config, posts_file)?;
+    run_service(env_config)?;
     shutdown.store(true, Ordering::Relaxed);
     health_answerer_thread.join().expect("Failed to join health_answerer_thread");
     Ok(())
 }
 
-fn run_service(config: Config, posts_file: String) -> Result<()> {
+fn run_service(config: Config) -> Result<()> {
     let connection = RabbitConnection::new(&config)?;
     {
         let consumers = str::parse::<usize>(&config.consumers).unwrap();
@@ -39,7 +39,9 @@ fn run_service(config: Config, posts_file: String) -> Result<()> {
             connection.get_named_exchange(POSTS_SOURCE_EXCHANGE_NAME, ExchangeType::Fanout)?;
         let bin_exchange = BinaryExchange::new(exchange, None, 1, consumers);
         let mut exchange = BufExchange::new(bin_exchange);
-        let posts = PostIterator::from_file(&posts_file);
+        let listener = TcpListener::bind("0.0.0.0:9090").expect("Could not bind listener");
+        let (stream, _) = listener.accept().expect("Could not accept server connection");
+        let posts = PostIterator::from_stream(stream);
         info!("Iterating posts");
         let published = posts
             .map(Message::FullPost)
