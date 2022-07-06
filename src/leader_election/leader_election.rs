@@ -3,7 +3,6 @@ use std::{
     thread,
     time::Duration,
 };
-
 use super::vector::Vector;
 
 pub const TIMEOUT: Duration = Duration::from_secs(20);
@@ -43,14 +42,23 @@ impl LeaderElection {
         }
     }
 
+    fn set_leader_id(&self, id: Option<usize>) {
+        *self.leader_id.0.lock().unwrap() = id;
+        self.leader_id.1.notify_all();
+    }
+
+    fn set_got_ok(&self, got_ok: bool) {
+        *self.got_ok.0.lock().unwrap() = got_ok;
+        self.got_ok.1.notify_all();
+    }
+
     pub fn process_msg(&self, msg: (usize, u8)) {
         let (id_from, opcode) = msg;
 
         match opcode {
             b'O' => {
                 println!("received OK from {}", id_from);
-                *self.got_ok.0.lock().unwrap() = true;
-                self.got_ok.1.notify_all();
+                self.set_got_ok(true);
             }
             b'E' => {
                 println!("received ELECTION from {}", id_from);
@@ -62,8 +70,7 @@ impl LeaderElection {
             }
             b'C' => {
                 println!("received new COORDINATOR {}", id_from);
-                *self.leader_id.0.lock().unwrap() = Some(id_from);
-                self.leader_id.1.notify_all();
+                self.set_leader_id(Some(id_from));
             }
             _ => {}
         }
@@ -85,18 +92,19 @@ impl LeaderElection {
         self.get_leader_id() == self.id
     }
 
-    // send msg ELECTION to all process with a greater id
     fn send_election(&mut self) {
-        println!("send election");
+        println!("send ELECTION");
         for id_peer in (self.id + 1)..self.n_members {
             self.output.push((id_peer, (self.id, b'E')));
         }
     }
 
     pub fn find_new(&mut self) {
-        println!("[{}] searching lider", self.id);
-        *self.got_ok.0.lock().unwrap() = false;
-        *self.leader_id.0.lock().unwrap() = None;
+        println!("searching lider");
+
+        self.set_got_ok(false);
+        self.set_leader_id(None);
+
         self.send_election();
 
         match self
@@ -106,16 +114,14 @@ impl LeaderElection {
         {
             Ok(got_ok) => {
                 if !*got_ok.0 {
-                    println!("[{}] any ok received", self.id);
-
-                    // make me leader
+                    println!("any ok received");
                     println!("i'am the new lider");
 
                     for peer_id in 0..self.n_members {
                         self.output.push((peer_id, (self.id, b'C')));
                     }
 
-                    *self.leader_id.0.lock().unwrap() = Some(self.id);
+                    self.set_leader_id(Some(self.id));
                 }
             }
             Err(_) => {}
