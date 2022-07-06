@@ -85,17 +85,15 @@ impl Server {
 
         let file_size = self.read_file_size(from)?;
         println!("file_size is {:?}", file_size);
-        let mut buf_reader = BufReader::new(from.try_clone()?);
         let mut sent = 0;
         loop {
             let chunk_to_read = if file_size - sent > self.chunk_size { self.chunk_size }  else {file_size - sent};
-            let mut chunk = Vec::with_capacity(chunk_to_read as usize);
-            let read_size = buf_reader.by_ref().take(chunk_to_read as u64).read_to_end(&mut chunk)?;
+            let mut chunk = self.read_chunk(from, chunk_to_read as usize)?;
             to.write_all(&chunk)?; // -> TODO: EL DESTINO SE PUEDE CAER (POSTS O COMMENTS)!!!!!
             // Supongo que en ese caso simplemente fallo maybe? O que onda?? Hay que pensar bien como
             // manejar esto... Pero a priori tal vez lo mas facil es contestar que no estamos disponibles supongo
             // y chau no?
-            sent += read_size as u64;
+            sent += chunk_to_read as u64;
             if sent >= file_size { break; }
         }
         println!("Finished sending {:?}", file_size);
@@ -115,6 +113,18 @@ impl Server {
         return Ok(u64::from_be_bytes(file_size_buff));
     }
 
+    pub fn read_chunk(&self, stream: &mut TcpStream, n: usize) -> io::Result<Vec<u8>> {
+        let mut received = vec![0; n];
+        let mut n_received = 0;
+        loop {
+            let n_bytes = stream.read(&mut received[n_received..])?;
+            n_received += n_bytes;
+            if n_received == received.len() {
+                break;
+            }
+        }
+        return Ok(received);
+    }
 }
 
 #[derive(Clone, Envconfig)]
