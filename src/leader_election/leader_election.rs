@@ -8,10 +8,6 @@ use super::vector::Vector;
 pub const TIMEOUT: Duration = Duration::from_secs(20);
 const FIRST_LIDER: usize = 0;
 
-pub fn id_to_dataaddr(process_id: usize) -> String {
-    format!("task_management_{}:1235", process_id)
-}
-
 #[derive(Clone)]
 pub struct LeaderElection {
     id: usize,

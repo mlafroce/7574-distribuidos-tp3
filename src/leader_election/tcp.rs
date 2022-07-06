@@ -1,5 +1,9 @@
 use std::{net::{UdpSocket, TcpListener, TcpStream}, time::Duration, mem::size_of, sync::{Arc, RwLock}, collections::HashMap, thread};
-use super::{leader_election::{TIMEOUT, id_to_dataaddr, LeaderElection}, socket::Socket, vector::Vector};
+use super::{leader_election::{TIMEOUT, LeaderElection}, socket::Socket, vector::Vector};
+
+pub fn id_to_dataaddr(process_id: usize) -> String {
+    format!("task_management_{}:1235", process_id)
+}
 
 pub fn send_pong(socket: UdpSocket, n_members: usize) {
     let mut buf = [0; 4];
