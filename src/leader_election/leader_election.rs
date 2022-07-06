@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, Condvar, Mutex},
+    sync::{Arc, Condvar, Mutex, RwLock},
     thread,
     time::Duration,
 };
@@ -12,7 +12,7 @@ const FIRST_LIDER: usize = 0;
 pub struct LeaderElection {
     id: usize,
     output: Vector<(usize, (usize, u8))>,
-    leader_id: Arc<(Mutex<Option<usize>>, Condvar)>,
+    leader_id: Arc<RwLock<Option<usize>>>,
     got_ok: Arc<(Mutex<bool>, Condvar)>,
     n_members: usize
 }
@@ -22,7 +22,7 @@ impl LeaderElection {
         LeaderElection {
             id: id,
             output: output,
-            leader_id: Arc::new((Mutex::new(Some(FIRST_LIDER)), Condvar::new())),
+            leader_id: Arc::new(RwLock::new(Some(FIRST_LIDER))),
             got_ok: Arc::new((Mutex::new(false), Condvar::new())),
             n_members: n_members
         }
@@ -39,8 +39,9 @@ impl LeaderElection {
     }
 
     fn set_leader_id(&self, id: Option<usize>) {
-        *self.leader_id.0.lock().unwrap() = id;
-        self.leader_id.1.notify_all();
+        if let Ok(mut leader_id) = self.leader_id.write() {
+            *leader_id = id;
+        }
     }
 
     fn set_got_ok(&self, got_ok: bool) {
@@ -72,20 +73,15 @@ impl LeaderElection {
         }
     }
 
-    pub fn get_leader_id(&self) -> usize {
-        let (lock, cvar) = &*self.leader_id;
-        match cvar.wait_while(lock.lock().unwrap(), |leader_id| leader_id.is_none()) {
-            Ok(id) => {
-                return id.unwrap();
-            }
-            Err(_) => {
-                panic!()
-            }
+    pub fn get_leader_id(&self) -> Option<usize> {
+        if let Ok(leader_id) = self.leader_id.read() {
+            return *leader_id
         }
+        None
     }
 
     pub fn am_i_leader(&self) -> bool {
-        self.get_leader_id() == self.id
+        self.get_leader_id() == Some(self.id)
     }
 
     fn send_election(&mut self) {

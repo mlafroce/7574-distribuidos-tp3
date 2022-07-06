@@ -6,10 +6,10 @@ use std::io::{BufRead, BufReader};
 use std::net::UdpSocket;
 use envconfig::Envconfig;
 use tp2::leader_election::leader_election::{LeaderElection};
-use tp2::leader_election::tcp::{process_output, process_input, tcp_connect, tcp_listen, send_pong, send_ping, id_to_dataaddr};
+use tp2::leader_election::tcp::{process_output, process_input, tcp_connect, tcp_listen, is_leader_alive, id_to_dataaddr};
 use tp2::leader_election::vector::Vector;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex, Condvar};
 use std::thread::spawn;
 use signal_hook::{consts::SIGTERM, iterator::Signals};
 use tp2::task_manager::task_manager::TaskManager;
@@ -28,24 +28,29 @@ fn main() {
     let mut task_management_clone = task_management.clone();
 
     // Begin Leader
+    let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
+    let mut got_pong_clone = got_pong.clone();
     let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
-    let socket = UdpSocket::bind(id_to_dataaddr(process_id)).unwrap();
     let input: Vector<(usize, u8)> = Vector::new();
     let output: Vector<(usize, (usize, u8))> = Vector::new();
     let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
     let sockets_lock_clone = sockets_lock.clone();
     let sockets_lock_clone_2 = sockets_lock.clone();
+    let mut sockets_lock_clone_3 = sockets_lock.clone();
     let mut input_clone = input.clone();
     let ouput_clone = output.clone();
     let mut election = LeaderElection::new(process_id, output, N_MEMBERS);
     let election_clone = election.clone();
     input_clone = input.clone();
-    let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone));
+    let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone));
     input_clone = input.clone();
-    tcp_connect(process_id, input_clone, sockets_lock, N_MEMBERS);
-    thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_2));
+    got_pong_clone = got_pong.clone();
+    tcp_connect(process_id, input_clone, sockets_lock_clone_2, N_MEMBERS, got_pong_clone);
+    thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_3));
     thread::spawn(move || process_input(election_clone, input));
     // End Leader
+
+    thread::sleep(Duration::from_secs(10));
 
     let mut running_service = false;
     loop {
@@ -56,13 +61,17 @@ fn main() {
                 thread::spawn(move || task_management_clone.run());
                 task_management_clone = task_management.clone()
             }
-            send_pong(socket.try_clone().unwrap(), N_MEMBERS);
         } else {
             println!("not leader");
-            if let Err(_) = send_ping(&socket, election.get_leader_id()) {
-                election.find_new()
+            if let Some(leader_id) = election.get_leader_id() {
+                sockets_lock_clone_3 = sockets_lock.clone();
+                got_pong_clone = got_pong.clone();
+                if !is_leader_alive(leader_id, sockets_lock_clone_3, got_pong_clone) {
+                    election.find_new();
+                }
             }
         }
+
         thread::sleep(Duration::from_secs(5));
     }
 

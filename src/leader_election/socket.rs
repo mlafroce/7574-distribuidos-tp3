@@ -3,7 +3,7 @@ use std::{
     net::TcpStream,
 };
 
-const CHUNK_SIZE: usize = 5;
+const CHUNK_SIZE: usize = 1;
 
 pub struct Socket {
     stream: TcpStream,
