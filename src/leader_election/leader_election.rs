@@ -54,7 +54,7 @@ impl LeaderElection {
                 self.got_ok.1.notify_all();
             }
             b'E' => {
-                println!("received ELECTION de {}", id_from);
+                println!("received ELECTION from {}", id_from);
                 if id_from < self.id {
                     self.output.push((id_from, (self.id, b'O')));
                     let mut me = self.clone();
@@ -110,12 +110,11 @@ impl LeaderElection {
                     println!("[{}] any ok received", self.id);
 
                     // make me leader
-                    println!("iam the new lider");
+                    println!("i'am the new lider");
 
-                    self.output.push((0, (self.id, b'C')));
-                    self.output.push((1, (self.id, b'C')));
-                    self.output.push((2, (self.id, b'C')));
-                    self.output.push((3, (self.id, b'C')));
+                    for peer_id in 0..self.n_members {
+                        self.output.push((peer_id, (self.id, b'C')));
+                    }
 
                     *self.leader_id.0.lock().unwrap() = Some(self.id);
                 }
