@@ -1,8 +1,11 @@
 use std::{io, thread};
+use std::fs::read;
 use std::io::{BufReader, Read, Write};
+use std::net::Shutdown::Both;
 use std::net::TcpStream;
 use std::time::Duration;
 use envconfig::Envconfig;
+use std::str;
 
 fn main() {
     thread::sleep(Duration::from_secs(30));
@@ -11,8 +14,11 @@ fn main() {
     let mut connection = TcpStream::connect(config.server_address).expect("Failed to connect to server");
     send_file(&mut connection, &config.posts_path, config.chunk_size).expect("Failed to send posts");
     send_file(&mut connection, &config.comments_path, config.chunk_size).expect("Failed to send comments");
-    // receive_results(&connection); ???
     println!("Client finished sending everything");
+    println!("Client waiting for results");
+    receive_results(&mut connection);
+    let _ = connection.shutdown(Both);
+    println!("Client exiting");
 }
 
 pub fn send_file(connection: &mut TcpStream, path: &str, chunk_size: u32) -> io::Result<()> {
@@ -30,6 +36,55 @@ pub fn send_file(connection: &mut TcpStream, path: &str, chunk_size: u32) -> io:
         if sent >= file_size { break; }
     }
     Ok(())
+}
+
+pub fn receive_results(connection:&mut TcpStream) {
+    let best_meme = read_string(connection);
+    let score_mean_vec =  read_chunk(connection, 4).expect("Failed to read best meme size");
+    let score_mean = f32::from_be_bytes(<[u8; 4]>::try_from(&score_mean_vec[0..4]).unwrap());
+    let mut college_posts = vec![];
+    loop {
+        let msg = read_string(connection);
+        if msg == "FINISHED" {
+            break;
+        }
+        college_posts.push(msg);
+    }
+    println!("Best meme received: {:?}", best_meme);
+    println!("Score mean received: {:?}", score_mean);
+    println!("College posts received: {:?}", college_posts.len());
+}
+
+pub fn read_string(connection:&mut TcpStream) -> String {
+    let best_meme_size = read_msg_size(connection).expect("Could not receive msg len");
+    let best_meme_vec = read_chunk(connection, best_meme_size).expect("Failed to read best meme size");
+    str::from_utf8(&best_meme_vec).unwrap().to_string()
+}
+
+pub fn read_msg_size(stream: &mut TcpStream) -> io::Result<u64> {
+    let mut file_size_buff = [0u8; 8];
+    let mut n_received = 0;
+    loop {
+        let n_bytes = stream.read(&mut file_size_buff[n_received..])?;
+        n_received += n_bytes;
+        if n_received == file_size_buff.len() {
+            break;
+        }
+    }
+    return Ok(u64::from_be_bytes(file_size_buff));
+}
+
+pub fn read_chunk(stream: &mut TcpStream, n: u64) -> io::Result<Vec<u8>> {
+    let mut received = vec![0; n as usize];
+    let mut n_received = 0;
+    loop {
+        let n_bytes = stream.read(&mut received[n_received..])?;
+        n_received += n_bytes;
+        if n_received == received.len() {
+            break;
+        }
+    }
+    return Ok(received);
 }
 
 #[derive(Clone, Envconfig)]
