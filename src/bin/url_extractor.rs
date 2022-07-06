@@ -31,10 +31,6 @@ impl MessageProcessor for UrlExtractor {
         None
     }
 
-    fn on_stream_finished(&self) -> Option<Message> {
-        Some(Message::EndOfStream)
-    }
-
     fn send_process_output<E: RabbitExchange>(
         &self,
         exchange: &mut E,

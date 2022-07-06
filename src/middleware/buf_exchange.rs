@@ -43,7 +43,7 @@ impl Drop for BufExchange<'_> {
 impl RabbitExchange for BufExchange<'_> {
     fn send<T>(&mut self, message: &T) -> Result<()>
     where
-        T: Serialize,
+        T: Serialize + std::fmt::Debug,
     {
         self.bulk_builder.push(message);
         if self.bulk_builder.size() > self.max_buf_size {
@@ -54,7 +54,7 @@ impl RabbitExchange for BufExchange<'_> {
 
     fn send_with_key<T>(&mut self, _message: &T, _key: &str) -> Result<()>
     where
-        T: Serialize,
+        T: Serialize + std::fmt::Debug,
     {
         todo!()
     }

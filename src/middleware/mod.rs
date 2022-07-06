@@ -22,11 +22,11 @@ impl From<Error> for ServiceError {
 pub trait RabbitExchange {
     fn send<T>(&mut self, message: &T) -> Result<()>
     where
-        T: serde::Serialize;
+        T: serde::Serialize + std::fmt::Debug;
 
     fn send_with_key<T>(&mut self, message: &T, key: &str) -> Result<()>
     where
-        T: serde::Serialize;
+        T: serde::Serialize + std::fmt::Debug;
 
     /// Call when an end of stream arrives. If no producers are left, notify consumers about EOS
     /// Returns true if finished, false otherwise

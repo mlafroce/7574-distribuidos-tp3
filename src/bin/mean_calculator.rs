@@ -58,4 +58,8 @@ impl MessageProcessor for MeanCalculator {
     fn get_state(&self) -> Option<Self::State> {
         Some((self.score_count, self.score_sum))
     }
+
+    fn set_state(&mut self, state: Self::State) {
+        (self.score_count, self.score_sum) = state;
+    }
 }

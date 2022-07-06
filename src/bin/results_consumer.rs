@@ -7,8 +7,6 @@ use tp2::middleware::consumer::DeliveryConsumer;
 use tp2::middleware::service::init;
 use tp2::{Config, RESULTS_QUEUE_NAME};
 
-const N_RESULTS: usize = 1;
-
 fn main() -> Result<()> {
     let env_config = init();
     let output_path =
@@ -40,7 +38,6 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
     let queue = channel.queue_declare(RESULTS_QUEUE_NAME, options)?;
 
     // Query results
-    let mut count = 0;
     let mut results = Results::default();
     let mut data_received = (false, false, false);
     let consumer = queue.consume(ConsumerOptions::default())?;
@@ -63,12 +60,10 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
                 Message::CollegePostUrl(url) => {
                     results.college_posts.push(url);
                 }
-                Message::EndOfStream => {
+                Message::EndOfStream => {}
+                Message::CollegePostEnded => {
                     info!("College posts ended");
-                    count += 1;
-                    if count == N_RESULTS {
-                        data_received.2 = true;
-                    }
+                    data_received.2 = true;
                 }
                 Message::Confirmed  => {}
                 _ => {
