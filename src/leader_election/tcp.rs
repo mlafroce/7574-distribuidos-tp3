@@ -25,7 +25,6 @@ pub fn send_ping(socket: &UdpSocket, leader_id: usize) -> Result<(), ()> {
 }
 
 const PORT: &str = "1234";
-const MEMBERS: [usize; 4] = [0, 1, 2, 3];
 
 fn tcp_receive_id(socket: &mut Socket) -> usize{
     let buffer = socket.read(size_of::<usize>());
@@ -93,10 +92,10 @@ pub fn tcp_listen(process_id: usize, vector: Vector<(usize, u8)>, sockets_lock: 
     }
 }
 
-pub fn tcp_connect(process_id: usize, input: Vector<(usize, u8)>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>) {
+pub fn tcp_connect(process_id: usize, input: Vector<(usize, u8)>, sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>, n_members: usize) {
     let mut input_clone = input.clone();
 
-    let members = MEMBERS.to_vec();
+    let members: Vec<usize> = (0..n_members).collect();
     
     for peer_id in members[process_id..].iter() {
         let peer_id_clone = peer_id.clone();
