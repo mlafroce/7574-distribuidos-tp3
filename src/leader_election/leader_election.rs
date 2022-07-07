@@ -1,7 +1,6 @@
 use std::{
     sync::{Arc, Condvar, Mutex, RwLock},
-    thread,
-    time::Duration,
+    time::Duration, thread::{self, JoinHandle},
 };
 use super::vector::Vector;
 
@@ -49,7 +48,7 @@ impl LeaderElection {
         self.got_ok.1.notify_all();
     }
 
-    pub fn process_msg(&self, msg: (usize, u8)) {
+    pub fn process_msg(&mut self, msg: (usize, u8)) -> Option<JoinHandle<()>> {
         let (id_from, opcode) = msg;
 
         match opcode {
@@ -62,7 +61,7 @@ impl LeaderElection {
                 if id_from < self.id {
                     self.output.push((id_from, (self.id, b'O')));
                     let mut me = self.clone();
-                    thread::spawn(move || me.find_new());
+                    return Some(thread::spawn(move || me.find_new()));
                 }
             }
             b'C' => {
@@ -71,6 +70,8 @@ impl LeaderElection {
             }
             _ => {}
         }
+
+        None
     }
 
     pub fn get_leader_id(&self) -> Option<usize> {
