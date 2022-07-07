@@ -27,6 +27,9 @@ fn main() {
     let mut task_management_clone = task_management.clone();
 
     // Begin Leader
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let mut shutdown_clone = shutdown.clone();
+    let signals_thread = spawn(move || handle_sigterm(shutdown_clone));
     let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
     let mut got_pong_clone = got_pong.clone();
     let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
@@ -41,17 +44,19 @@ fn main() {
     let mut election = LeaderElection::new(process_id, output, N_MEMBERS);
     let election_clone = election.clone();
     input_clone = input.clone();
-    let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone));
+    shutdown_clone = shutdown.clone();
+    let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone, shutdown_clone));
     input_clone = input.clone();
     got_pong_clone = got_pong.clone();
     tcp_connect(process_id, input_clone, sockets_lock_clone_2, N_MEMBERS, got_pong_clone);
-    thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_3));
-    thread::spawn(move || process_input(election_clone, input));
+    let output_processor = thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_3));
+    let input_processor = thread::spawn(move || process_input(election_clone, input));
     // End Leader
 
     thread::sleep(Duration::from_secs(10));
 
     let mut running_service = false;
+    shutdown_clone = shutdown.clone();
     loop {
         if election.am_i_leader() {
             println!("leader");
@@ -71,10 +76,21 @@ fn main() {
             }
         }
 
+        if shutdown_clone.load(Ordering::Relaxed) {
+            break;
+        }
+
         thread::sleep(Duration::from_secs(5));
     }
 
-    tcp_listener.join().unwrap();
+    println!("joining tcp_listener ");
+    if let Ok(_) = tcp_listener.join() {
+        println!("tcp_listener joined");
+    }
+    
+    input_processor.join().unwrap();
+    output_processor.join().unwrap();
+    signals_thread.join().unwrap();
     
     println!("Exited gracefully");
 }

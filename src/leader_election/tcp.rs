@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     mem::size_of,
     net::{TcpListener, TcpStream},
-    sync::{Arc, Condvar, Mutex, RwLock},
+    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Condvar, Mutex, RwLock, },
     thread,
     time::Duration,
 };
@@ -38,7 +38,7 @@ pub fn is_leader_alive(
 
     *got_pong.0.lock().unwrap() = false;
 
-    return leader_alive    
+    return leader_alive;
 }
 
 const PORT: &str = "1234";
@@ -108,7 +108,12 @@ fn receive(socket: &mut Socket) -> (u8, (u8, usize)) {
     }
 }
 
-fn tcp_receive_messages(from_id: usize, socket: &mut Socket, input: Vector<(usize, u8)>, got_pong: Arc<(Mutex<bool>, Condvar)>) {
+fn tcp_receive_messages(
+    from_id: usize,
+    socket: &mut Socket,
+    input: Vector<(usize, u8)>,
+    got_pong: Arc<(Mutex<bool>, Condvar)>,
+) {
     println!("receiving msgs | from: {}", from_id);
 
     loop {
@@ -141,7 +146,8 @@ pub fn tcp_listen(
     process_id: usize,
     vector: Vector<(usize, u8)>,
     sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>,
-    got_pong: Arc<(Mutex<bool>, Condvar)>
+    got_pong: Arc<(Mutex<bool>, Condvar)>,
+    shutdown: Arc<AtomicBool>,
 ) {
     let mut threads = Vec::new();
 
@@ -154,20 +160,35 @@ pub fn tcp_listen(
         Err(_) => panic!("could not start socket aceptor"),
     }
 
+    if let Err(_) = listener.set_nonblocking(true) {
+        panic!("could not set listener as non blocking")
+    }
+
     let mut vector_clone = vector.clone();
+    let shutdown_clone = shutdown.clone();
     for stream_result in listener.incoming() {
-        if let Ok(stream) = stream_result {
-            let mut socket = Socket::new(stream);
-            let socket_clone = socket.clone();
-            let from_id = tcp_receive_id(&mut socket);
-            if let Ok(mut sockets) = sockets_lock.write() {
-                sockets.insert(from_id, socket_clone);
+        match stream_result {
+            Ok(stream) => {
+                let mut socket = Socket::new(stream);
+                let socket_clone = socket.clone();
+                let from_id = tcp_receive_id(&mut socket);
+                if let Ok(mut sockets) = sockets_lock.write() {
+                    sockets.insert(from_id, socket_clone);
+                }
+                let got_pong_clone = got_pong.clone();
+                threads.push(thread::spawn(move || {
+                    tcp_receive_messages(from_id, &mut socket, vector_clone, got_pong_clone)
+                }));
+                vector_clone = vector.clone();
             }
-            let got_pong_clone = got_pong.clone();
-            threads.push(thread::spawn(move || {
-                tcp_receive_messages(from_id, &mut socket, vector_clone, got_pong_clone)
-            }));
-            vector_clone = vector.clone();
+            Err(_) => {
+                if shutdown_clone.load(Ordering::Relaxed) {
+                    break;
+                } else {
+                    thread::sleep(Duration::from_secs(1));
+                    continue;
+                }
+            }
         }
     }
 
@@ -181,7 +202,7 @@ pub fn tcp_connect(
     input: Vector<(usize, u8)>,
     sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>,
     n_members: usize,
-    got_pong: Arc<(Mutex<bool>, Condvar)>
+    got_pong: Arc<(Mutex<bool>, Condvar)>,
 ) {
     let mut input_clone = input.clone();
 
