@@ -1,7 +1,6 @@
 use std::io;
-use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::io::BufReader;
+use std::io::{Error, ErrorKind, Read, Write};
 use amiquip::{Connection, ConsumerOptions, QueueDeclareOptions, Result};
 use tp2::{Config, RESULTS_QUEUE_NAME};
 use tp2::middleware::buf_consumer::BufConsumer;
@@ -9,7 +8,6 @@ use tp2::middleware::consumer::DeliveryConsumer;
 use tp2::messages::Message;
 use log::{debug, error, info};
 use envconfig::Envconfig;
-use std::str;
 
 const N_RESULTS: usize = 1;
 
@@ -49,7 +47,13 @@ impl Server {
         for client in listener.incoming() {
             match client {
                 Ok(mut stream) => {
-                    self.handle_client(&mut stream, config);
+                    match self.handle_client(&mut stream, config) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            println!("Error while handling client: {:?}", e);
+                            self.answer_not_available(&mut stream);
+                        }
+                    }
                 }
                 Err(e) => {
                     println!("Failed to accept client. Error: {:?}", e);
@@ -58,49 +62,26 @@ impl Server {
         }
     }
 
-    fn handle_client(&self, stream: &mut TcpStream, config: &Config) {
+    fn handle_client(&self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
         println!("Forwarding posts");
-        match TcpStream::connect(self.posts_producer_address.clone()) {
-            Ok(mut post_producer_stream) => {
-                match self.forward_file(stream, &mut post_producer_stream) {
-                    Ok(_) => {},
-                    Err(e) => panic!("Error while forwarding posts: {:?}", e)
-                }
-            }
-            Err(e) => {
-                panic!("Error while forwarding posts: {:?}", e)
-            }
-        }
+        let mut post_producer_stream = TcpStream::connect(self.posts_producer_address.clone())?;
+        self.forward_file(stream, &mut post_producer_stream)?;
         println!("Forwarding comments");
-        match TcpStream::connect(self.comments_producer_address.clone()) {
-            Ok(mut comment_producer_stream) => {
-                match self.forward_file(stream, &mut comment_producer_stream) {
-                    Ok(_) => {},
-                    Err(e) => panic!("Error while forwarding comments: {:?}", e)
-                }
-            }
-            Err(e) => {
-                panic!("Error while forwarding comments: {:?}", e)
-            }
-        }
-        match self.wait_for_results(config) {
+        let mut comment_producer_stream = TcpStream::connect(self.comments_producer_address.clone())?;
+        self.forward_file(stream, &mut comment_producer_stream)?;
+        return match self.wait_for_results(config) {
             Ok(results) => {
                 println!("Best meme received: {:?}", results.best_meme);
                 println!("Score mean received: {:?}", results.score_mean);
                 println!("College posts received: {:?}", results.college_posts.len());
-                // send_results
-                match self.send_results_to_client(stream, &results) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        panic!("Error while sending results: {:?}", e);
-                    }
-                }
+                self.send_results_to_client(stream, &results)?;
+                let _ = stream.shutdown(Shutdown::Both);
+                Ok(())
             }
-            Err(e) => {
-                panic!("Error while waiting for results: {:?}", e);
+            Err(_) => {
+                Err(Error::new(ErrorKind::Other, "Failed to wait for results. Server not available"))
             }
         }
-        let _ = stream.shutdown(Shutdown::Both);
         // En los errores segun cuales lleguen podemos contestarle que no estamos disponibles y
         // a listo no?
         // Y que pasa si el propio server se cae a la mitad????? -> Medio dificil manejar esto no?
@@ -116,7 +97,7 @@ impl Server {
         let mut sent = 0;
         loop {
             let chunk_to_read = if file_size - sent > self.chunk_size { self.chunk_size }  else {file_size - sent};
-            let mut chunk = self.read_chunk(from, chunk_to_read)?;
+            let chunk = self.read_chunk(from, chunk_to_read)?;
             to.write_all(&chunk)?; // -> TODO: EL DESTINO SE PUEDE CAER (POSTS O COMMENTS)!!!!!
             // Supongo que en ese caso simplemente fallo maybe? O que onda?? Hay que pensar bien como
             // manejar esto... Pero a priori tal vez lo mas facil es contestar que no estamos disponibles supongo
@@ -133,6 +114,9 @@ impl Server {
         let mut n_received = 0;
         loop {
             let n_bytes = stream.read(&mut file_size_buff[n_received..])?;
+            if n_bytes == 0 {
+                return Err(Error::new(ErrorKind::UnexpectedEof, "Stream closed"));
+            }
             n_received += n_bytes;
             if n_received == file_size_buff.len() {
                 break;
@@ -146,6 +130,9 @@ impl Server {
         let mut n_received = 0;
         loop {
             let n_bytes = stream.read(&mut received[n_received..])?;
+            if n_bytes == 0 {
+                return Err(Error::new(ErrorKind::UnexpectedEof, "Stream closed"));
+            }
             n_received += n_bytes;
             if n_received == received.len() {
                 break;
@@ -220,8 +207,11 @@ impl Server {
         let best_meme_len = best_meme.len() as u64;
         stream.write_all(&best_meme_len.to_be_bytes())?;
         stream.write_all(best_meme)?;
-        let score_mean = results.score_mean;
-        stream.write_all(&score_mean.to_be_bytes())?;
+        let score_mean_string = results.score_mean.to_string();
+        let score_mean_bytes = score_mean_string.as_bytes();
+        let score_mean_len = score_mean_bytes.len() as u64;
+        stream.write_all(&score_mean_len.to_be_bytes())?;
+        stream.write_all(score_mean_bytes)?;
         for college_post in results.college_posts.clone() {
             let college_post_bytes = college_post.as_bytes();
             let college_post_len = college_post_bytes.len() as u64;
@@ -234,6 +224,15 @@ impl Server {
         stream.write_all(&ending_msg_bytes_len.to_be_bytes())?;
         stream.write_all(ending_msg_bytes)?;
         Ok(())
+    }
+
+    fn answer_not_available(&self, stream: &mut TcpStream) {
+        let not_available = "Server not available";
+        let not_available_bytes = not_available.as_bytes() ;
+        let not_available_bytes_len = not_available.len() as u64;
+        let _ = stream.write_all(&not_available_bytes_len.to_be_bytes());
+        let _ = stream.write_all(not_available_bytes);
+        println!("Sent not available to client");
     }
 
 }

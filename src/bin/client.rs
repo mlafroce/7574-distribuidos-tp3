@@ -1,5 +1,4 @@
 use std::{io, thread};
-use std::fs::read;
 use std::io::{BufReader, Read, Write};
 use std::net::Shutdown::Both;
 use std::net::TcpStream;
@@ -12,8 +11,8 @@ fn main() {
     println!("Client started");
     let config = ClientConfig::init_from_env().expect("Failed to read env configuration");
     let mut connection = TcpStream::connect(config.server_address).expect("Failed to connect to server");
-    send_file(&mut connection, &config.posts_path, config.chunk_size).expect("Failed to send posts");
-    send_file(&mut connection, &config.comments_path, config.chunk_size).expect("Failed to send comments");
+    let _ = send_file(&mut connection, &config.posts_path, config.chunk_size);
+    let _ = send_file(&mut connection, &config.comments_path, config.chunk_size);
     println!("Client finished sending everything");
     println!("Client waiting for results");
     receive_results(&mut connection);
@@ -40,18 +39,25 @@ pub fn send_file(connection: &mut TcpStream, path: &str, chunk_size: u32) -> io:
 
 pub fn receive_results(connection:&mut TcpStream) {
     let best_meme = read_string(connection);
-    let score_mean_vec =  read_chunk(connection, 4).expect("Failed to read best meme size");
-    let score_mean = f32::from_be_bytes(<[u8; 4]>::try_from(&score_mean_vec[0..4]).unwrap());
+    println!("Best meme received: {:?}", best_meme);
+    if best_meme == "Server not available" {
+        return
+    }
+    let score_mean = read_string(connection);
+    println!("Score mean received: {:?}", score_mean);
+    if best_meme == "Server not available" {
+        return
+    }
     let mut college_posts = vec![];
     loop {
         let msg = read_string(connection);
-        if msg == "FINISHED" {
+        if msg == "FINISHED" || msg == "Server not available" {
+            println!("Received: {}", msg);
             break;
         }
+        println!("College post: {:?}", msg);
         college_posts.push(msg);
     }
-    println!("Best meme received: {:?}", best_meme);
-    println!("Score mean received: {:?}", score_mean);
     println!("College posts received: {:?}", college_posts.len());
 }
 
@@ -70,6 +76,9 @@ pub fn read_msg_size(stream: &mut TcpStream) -> io::Result<u64> {
         if n_received == file_size_buff.len() {
             break;
         }
+        if n_bytes == 0 {
+            break;
+        }
     }
     return Ok(u64::from_be_bytes(file_size_buff));
 }
@@ -81,6 +90,9 @@ pub fn read_chunk(stream: &mut TcpStream, n: u64) -> io::Result<Vec<u8>> {
         let n_bytes = stream.read(&mut received[n_received..])?;
         n_received += n_bytes;
         if n_received == received.len() {
+            break;
+        }
+        if n_bytes == 0 {
             break;
         }
     }
