@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker-compose -f docker-compose.yaml stop -t 5 task_management_3
+docker-compose -f docker-compose.yaml stop -t 10 task_management_3
