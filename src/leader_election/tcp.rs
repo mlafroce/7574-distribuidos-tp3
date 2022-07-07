@@ -245,29 +245,16 @@ pub fn tcp_connect(
 }
 
 pub fn process_input(mut leader_election: LeaderElection, input: Vector<(usize, u8)>) {
-    let mut wait_ok: Option<JoinHandle<()>> = None;
-
     loop {
         match input.pop() {
             Ok(msg_option) => {
                 if let Some(msg) = msg_option {
-                    if let Some(wait_ok_new) = leader_election.process_msg(msg) {
-                        if wait_ok.is_some() {
-                            wait_ok.unwrap().join().unwrap();
-                        }
-                        wait_ok = Some(wait_ok_new);
-                    }
+                    leader_election.process_msg(msg);
                 }
             }
             Err(_) => {
                 break;
             }
-        }
-    }
-
-    if wait_ok.is_some() {
-        if let Ok(_) = wait_ok.unwrap().join() {
-            println!("wait_ok joined")
         }
     }
 
