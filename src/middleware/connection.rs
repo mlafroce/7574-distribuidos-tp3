@@ -55,6 +55,7 @@ impl RabbitConnection {
     }
 
     pub fn close(self) -> Result<()> {
+        self.channel.close()?;
         self.connection.close()
     }
 }

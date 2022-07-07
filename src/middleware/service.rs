@@ -150,7 +150,10 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
             }
         }
         info!("Exit");
-        connection.close()?;
+        match connection.close() {
+            Ok(_) => {},
+            Err(e) => {info!("Failed to properly close RabbitMQ connection: {:?}", e)}
+        }
         Ok(())
     }
 }
