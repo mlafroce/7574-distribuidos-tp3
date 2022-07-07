@@ -33,6 +33,7 @@ fn main() -> Result<()> {
     }
     shutdown.store(true, Ordering::Relaxed);
     health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+    sigterm_handler_join.join().expect("Failed to join handle_sigterm");
     Ok(())
 }
 
