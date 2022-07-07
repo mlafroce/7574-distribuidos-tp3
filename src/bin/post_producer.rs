@@ -16,6 +16,7 @@ use tp2::middleware::RabbitExchange;
 use tp2::post::PostIterator;
 use tp2::sigterm_handler::sigterm_handler::handle_sigterm;
 use tp2::{Config, POSTS_SOURCE_EXCHANGE_NAME};
+use tp2::read_string::read_string::read_string;
 
 fn main() -> Result<()> {
     let env_config = Config::init_from_env().unwrap();
@@ -52,7 +53,17 @@ fn run_service(config: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
 
         for stream_result in listener.incoming() {
             match stream_result {
-                Ok(stream) => {
+                Ok(mut stream) => {
+
+                    let id = match read_string(&mut stream) {
+                        Ok(id) => id,
+                        Err(e) => {
+                            println!("Failed to read id. Error {:?}", e);
+                            continue;
+                        }
+                    };
+
+                    println!("Id received: {}", id);
 
                     let posts = PostIterator::from_stream(stream);
                     info!("Iterating posts");

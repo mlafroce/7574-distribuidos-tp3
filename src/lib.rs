@@ -9,6 +9,7 @@ pub mod health_checker;
 pub mod task_manager;
 pub mod leader_election;
 pub mod sigterm_handler;
+pub mod read_string;
 
 #[derive(Clone, Envconfig)]
 pub struct Config {

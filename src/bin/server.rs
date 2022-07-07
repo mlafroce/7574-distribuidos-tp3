@@ -11,10 +11,11 @@ use tp2::messages::Message;
 use log::{debug, error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::spawn;
-use std::time::Duration;
+use std::time::{Duration, SystemTimeError};
 use envconfig::Envconfig;
 use signal_hook::consts::SIGTERM;
 use signal_hook::iterator::Signals;
+use std::time::SystemTime;
 
 fn main() {
     println!("Server started");
@@ -26,9 +27,6 @@ fn main() {
     let server = Server::new(config.chunk_size, config.server_address, config.posts_producer_address, config.comments_producer_address);
     server.run(&env_config);
 }
-
-const MAX_TRIES_FOR_COMMENT_PRODUCER_CONNECTOR: u64 = 10;
-const SEC_BETWEEN_RETRIES_FOR_COMMENT: u64 = 30;
 
 pub struct Server {
     chunk_size: u64,
@@ -57,8 +55,6 @@ impl Server {
             handle_sigterm(shutdown_for_signals_thread.clone());
         });
 
-        // self.clean_queues(config);
-        // println!("Finished cleaning queues");
         let listener = TcpListener::bind(self.server_address.clone()).expect(&*format!("Could not bind to address: {}", self.server_address));
         listener.set_nonblocking(true).expect("Could not set non blocking to true");
         for client in listener.incoming() {
@@ -84,88 +80,29 @@ impl Server {
         signals_thread.join().expect("Failed to join signals thread");
     }
 
-    fn clean_queues(&self, config: &Config) {
-        // recover log ?
-        self.send_eof(self.posts_producer_address.clone());
-        // log send ?
-        self.send_eof(self.comments_producer_address.clone());
-        // log confirm ?
-        self.wait_for_empty_response(config);
-        // log ack ? Hace falta el wait? Tal vez puedo simplemente empezar a sacar respuestas en el primer
-        // cliente hasta que saque 1 empty? No estoy seguro
-    }
-
-    fn send_eof(&self, address: String) {
-        let mut sent = false;
-        while !sent {
-            match TcpStream::connect(address.clone()) {
-                Ok(_) => {sent = true}
-                Err(_) => {}
-            }
-        }
-    }
-
-    fn wait_for_empty_response(&self, config: &Config) {
-        let mut found_empty_response = false;
-        while !found_empty_response {
-            let result = self.wait_for_results(config).expect("Failed to wait for empty response");
-            found_empty_response = result.best_meme == "" && result.score_mean.is_nan() && result.college_posts.len() == 0;
-        }
-    }
-
     fn handle_client(&self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
-        println!("Forwarding posts");
-        let mut got_any_error = false;
-        // Can safely exit if post_producer connection fails
-        let mut post_producer_stream = TcpStream::connect(self.posts_producer_address.clone())?;
-        match self.forward_file(stream, &mut post_producer_stream) {
-            Ok(_) => {}
-            Err(e) => {
-                got_any_error = true;
-                error!("Got error {:?} while forwarding file", e);
+        let id = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+            Ok(timestamp) => timestamp.as_millis().to_string(),
+            Err(_) => {
+                return Err(Error::new(ErrorKind::Other, "Failed to create new id. Server not available"))
             }
         };
-        // Don't care what error got as long as socket closes
+        println!("Forwarding posts");
+        let mut post_producer_stream = TcpStream::connect(self.posts_producer_address.clone())?;
+        self.send_id(&mut post_producer_stream, &id)?;
+        self.forward_file(stream, &mut post_producer_stream)?;
         let _ = post_producer_stream.shutdown(Both);
         println!("Forwarding comments");
-        let mut connected_to_comment_producer = false;
-        let mut tries = MAX_TRIES_FOR_COMMENT_PRODUCER_CONNECTOR;
-        // This is the tricky part, we need to get at least a successful connect with the comment producer,
-        // so that we don't leave the services on an invalid state. This is because we need to trigger the EndOfStream by triggering
-        // and EOF on the producer.
-        while !connected_to_comment_producer {
-            match TcpStream::connect(self.comments_producer_address.clone()) {
-                Ok(mut comment_producer_stream) => {
-                    connected_to_comment_producer = true;
-                    match self.forward_file(stream, &mut comment_producer_stream) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            got_any_error = true;
-                            error!("Got error {:?} while forwarding file", e);
-                        }
-                    }
-                    // Same as before
-                    let _ = comment_producer_stream.shutdown(Both);
-                }
-                Err(e) => {
-                    error!("Failed to connect to comment producer: {:?}. Will retry", e);
-                    tries -= 1;
-                    if tries == 0 {
-                        self.answer_not_available(stream);
-                        // If reached this point, something REALLY bad happened and the whole system
-                        // is in an invalid state...
-                        panic!("We should never reach this point right? RIGHT!?");
-                    }
-                    thread::sleep(Duration::from_secs(SEC_BETWEEN_RETRIES_FOR_COMMENT));
-                }
-            }
-        }
+        let mut comment_producer_stream = TcpStream::connect(self.comments_producer_address.clone())?;
+        self.send_id(&mut comment_producer_stream, &id)?;
+        self.forward_file(stream, &mut comment_producer_stream)?;
+        let _ = comment_producer_stream.shutdown(Both);
         println!("Waiting for response");
         return match self.wait_for_results(config) {
             Ok(results) => {
-                if got_any_error {
-                    return Err(Error::new(ErrorKind::Other, "Something went wrong. Check the logs. Answering not available"));
-                }
+                // if results.id != id {
+                //     ???
+                // }
                 println!("Best meme received: {:?}", results.best_meme);
                 println!("Score mean received: {:?}", results.score_mean);
                 println!("College posts received: {:?}", results.college_posts.len());
@@ -176,6 +113,14 @@ impl Server {
                 Err(Error::new(ErrorKind::Other, "Failed to wait for results. Server not available"))
             }
         }
+    }
+
+    fn send_id(&self, stream: &mut TcpStream, id: &String) -> io::Result<()> {
+        let id_bytes = id.as_bytes();
+        let id_bytes_len = id_bytes.len() as u64;
+        stream.write_all(&id_bytes_len.to_be_bytes())?;
+        stream.write_all(id_bytes)?;
+        Ok(())
     }
 
     fn forward_file(&self, from: &mut TcpStream, to: &mut TcpStream) -> io::Result<()> {
