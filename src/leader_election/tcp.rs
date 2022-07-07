@@ -4,7 +4,7 @@ use std::{
     mem::size_of,
     net::{TcpListener, TcpStream},
     sync::{atomic::AtomicBool, atomic::Ordering, Arc, Condvar, Mutex, RwLock},
-    thread::{self, JoinHandle},
+    thread::{self},
     time::Duration,
 };
 
@@ -15,13 +15,14 @@ pub fn is_leader_alive(
 ) -> bool {
     let mut leader_alive = false;
 
-    // println!("send ping: start");
+    // send PING
     if let Ok(mut sockets) = sockets_lock.write() {
         if let Some(socket) = sockets.get_mut(&leader_id) {
             send_msg_ping(socket);
         }
     }
 
+    // wait PONG
     match got_pong.1.wait_timeout_while(
         got_pong.0.lock().unwrap(),
         Duration::from_secs(2),
@@ -29,7 +30,6 @@ pub fn is_leader_alive(
     ) {
         Ok(got_ok) => {
             if *got_ok.0 {
-                // println!("PONG detected");
                 leader_alive = true;
             }
         }
@@ -85,6 +85,8 @@ fn send_msg(socket: &mut Socket, opcode: u8, id: usize) {
     socket.write(&msg);
     msg.clear();
     msg.extend_from_slice(&opcode.to_le_bytes());
+    socket.write(&msg);
+    msg.clear();
     msg.extend_from_slice(&id.to_le_bytes());
     socket.write(&msg);
 }
@@ -100,10 +102,12 @@ fn tcp_receive_message(socket: &mut Socket) -> Option<(u8, (u8, usize))> {
                 return Some((0, (ping_or_pong, 0)));
             }
         } else {
-            if let Ok(buffer) = socket.read(1 + size_of::<usize>()) {
-                let opcode = buffer[0];
-                let peer_id = usize::from_le_bytes(buffer[1..].try_into().unwrap());
-                return Some((1, (opcode, peer_id)));
+            if let Ok(opcode_buffer) = socket.read(1) {
+                let opcode = opcode_buffer[0];
+                if let Ok(buffer) = socket.read(size_of::<usize>()) {
+                    let peer_id = usize::from_le_bytes(buffer.try_into().unwrap());
+                    return Some((1, (opcode, peer_id)));
+                }
             }
         }
     }
@@ -124,11 +128,11 @@ fn tcp_receive_messages(
                 // println!("receiving msgs | received: {:?}", msg);
                 match msg.0 {
                     0 => {
-                        if msg.1.0 == 0 {
+                        if msg.1 .0 == 0 {
                             // println!("received PING");
                             send_msg_pong(socket);
                         }
-                        if msg.1.0 == 1 {
+                        if msg.1 .0 == 1 {
                             // println!("received PONG");
                             *got_pong.0.lock().unwrap() = true;
                             got_pong.1.notify_all();
@@ -245,29 +249,16 @@ pub fn tcp_connect(
 }
 
 pub fn process_input(mut leader_election: LeaderElection, input: Vector<(usize, u8)>) {
-    let mut wait_ok: Option<JoinHandle<()>> = None;
-
     loop {
         match input.pop() {
             Ok(msg_option) => {
                 if let Some(msg) = msg_option {
-                    if let Some(wait_ok_new) = leader_election.process_msg(msg) {
-                        if wait_ok.is_some() {
-                            wait_ok.unwrap().join().unwrap();
-                        }
-                        wait_ok = Some(wait_ok_new);
-                    }
+                    leader_election.process_msg(msg);
                 }
             }
             Err(_) => {
                 break;
             }
-        }
-    }
-
-    if wait_ok.is_some() {
-        if let Ok(_) = wait_ok.unwrap().join() {
-            println!("wait_ok joined")
         }
     }
 
