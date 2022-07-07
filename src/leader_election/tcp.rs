@@ -18,7 +18,7 @@ pub fn is_leader_alive(
     // send PING
     if let Ok(mut sockets) = sockets_lock.write() {
         if let Some(socket) = sockets.get_mut(&leader_id) {
-            send_msg_ping(socket);
+            tcp_send_msg_ping(socket);
         }
     }
 
@@ -56,7 +56,7 @@ fn send_id(id: usize, socket: &mut Socket) {
     socket.write(&msg);
 }
 
-fn send_msg_pong(socket: &mut Socket) {
+fn tcp_send_msg_pong(socket: &mut Socket) {
     let mut msg = vec![];
     let layer_code: u8 = 0;
     msg.extend_from_slice(&layer_code.to_le_bytes());
@@ -67,7 +67,7 @@ fn send_msg_pong(socket: &mut Socket) {
     socket.write(&msg);
 }
 
-fn send_msg_ping(socket: &mut Socket) {
+fn tcp_send_msg_ping(socket: &mut Socket) {
     let mut msg = vec![];
     let layer_code: u8 = 0;
     msg.extend_from_slice(&layer_code.to_le_bytes());
@@ -78,7 +78,7 @@ fn send_msg_ping(socket: &mut Socket) {
     socket.write(&msg);
 }
 
-fn send_msg(socket: &mut Socket, opcode: u8, id: usize) {
+fn tcp_send_msg(socket: &mut Socket, opcode: u8, id: usize) {
     let mut msg = vec![];
     let layer_code: u8 = 1;
     msg.extend_from_slice(&layer_code.to_le_bytes());
@@ -130,7 +130,7 @@ fn tcp_receive_messages(
                     0 => {
                         if msg.1 .0 == 0 {
                             // println!("received PING");
-                            send_msg_pong(socket);
+                            tcp_send_msg_pong(socket);
                         }
                         if msg.1 .0 == 1 {
                             // println!("received PONG");
@@ -275,7 +275,7 @@ pub fn process_output(
                 if let Some(msg) = msg_option {
                     if let Ok(mut sockets) = sockets_lock.write() {
                         if let Some(socket) = sockets.get_mut(&msg.0) {
-                            send_msg(socket, msg.1 .1, msg.1 .0);
+                            tcp_send_msg(socket, msg.1 .1, msg.1 .0);
                         }
                     }
                 }
