@@ -56,31 +56,39 @@ fn send_id(id: usize, socket: &mut Socket) {
     socket.write(&msg);
 }
 
+/* Ping Pong */
+const LAYER_PING_PONG: u8 = 0;
+const PING: u8 = 0;
+const PONG: u8 = 1;
+/* */
+ 
+const LAYER_LEADER_ELECTION: u8 = 1;
+
 fn tcp_send_msg_pong(socket: &mut Socket) {
     let mut msg = vec![];
-    let layer_code: u8 = 0;
+    let layer_code: u8 = LAYER_PING_PONG;
     msg.extend_from_slice(&layer_code.to_le_bytes());
     socket.write(&msg);
     msg.clear();
-    let pong: u8 = 1;
+    let pong: u8 = PONG;
     msg.extend_from_slice(&pong.to_le_bytes());
     socket.write(&msg);
 }
 
 fn tcp_send_msg_ping(socket: &mut Socket) {
     let mut msg = vec![];
-    let layer_code: u8 = 0;
+    let layer_code: u8 = LAYER_PING_PONG;
     msg.extend_from_slice(&layer_code.to_le_bytes());
     socket.write(&msg);
     msg.clear();
-    let ping: u8 = 0;
+    let ping: u8 = PING;
     msg.extend_from_slice(&ping.to_le_bytes());
     socket.write(&msg);
 }
 
 fn tcp_send_msg(socket: &mut Socket, opcode: u8, id: usize) {
     let mut msg = vec![];
-    let layer_code: u8 = 1;
+    let layer_code: u8 = LAYER_LEADER_ELECTION;
     msg.extend_from_slice(&layer_code.to_le_bytes());
     socket.write(&msg);
     msg.clear();
@@ -95,13 +103,15 @@ fn tcp_receive_message(socket: &mut Socket) -> Option<(u8, (u8, usize))> {
     if let Ok(layercode_buffer) = socket.read(1) {
         let layercode = layercode_buffer[0];
 
-        if layercode == 0 {
+        if layercode == LAYER_PING_PONG {
             if let Ok(ping_or_pong_buffer) = socket.read(1) {
                 let ping_or_pong = ping_or_pong_buffer[0];
 
                 return Some((0, (ping_or_pong, 0)));
             }
-        } else {
+        }
+
+        if layercode == LAYER_LEADER_ELECTION {
             if let Ok(opcode_buffer) = socket.read(1) {
                 let opcode = opcode_buffer[0];
                 if let Ok(buffer) = socket.read(size_of::<usize>()) {
@@ -120,25 +130,20 @@ fn tcp_receive_messages(
     input: Vector<(usize, u8)>,
     got_pong: Arc<(Mutex<bool>, Condvar)>,
 ) {
-    // println!("receiving msgs | from: {}", from_id);
-
     loop {
         match tcp_receive_message(socket) {
             Some(msg) => {
-                // println!("receiving msgs | received: {:?}", msg);
                 match msg.0 {
-                    0 => {
-                        if msg.1 .0 == 0 {
-                            // println!("received PING");
+                    LAYER_PING_PONG => {
+                        if msg.1.0 == PING {
                             tcp_send_msg_pong(socket);
                         }
-                        if msg.1 .0 == 1 {
-                            // println!("received PONG");
+                        if msg.1.0 == PONG {
                             *got_pong.0.lock().unwrap() = true;
                             got_pong.1.notify_all();
                         }
                     }
-                    1 => {
+                    LAYER_LEADER_ELECTION => {
                         let msg_ = msg.1;
                         input.push((msg_.1, msg_.0))
                     }
