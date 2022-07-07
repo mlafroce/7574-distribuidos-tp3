@@ -100,12 +100,6 @@ impl Server {
                 Err(Error::new(ErrorKind::Other, "Failed to wait for results. Server not available"))
             }
         }
-        // En los errores segun cuales lleguen podemos contestarle que no estamos disponibles y
-        // a listo no?
-        // Y que pasa si el propio server se cae a la mitad????? -> Medio dificil manejar esto no?
-        // Tal vez podria tener un log para cuando termina de enviar todo entonces sabe que cuando se recupere,
-        // si el resultado que tenga en la cola es valido o no no?. Despues deja que todo el mundo procese y fue.
-        // De ultima apura el EOF y listo no?
     }
 
     fn forward_file(&self, from: &mut TcpStream, to: &mut TcpStream) -> io::Result<()> {
@@ -116,10 +110,7 @@ impl Server {
         loop {
             let chunk_to_read = if file_size - sent > self.chunk_size { self.chunk_size }  else {file_size - sent};
             let chunk = self.read_chunk(from, chunk_to_read)?;
-            to.write_all(&chunk)?; // -> TODO: EL DESTINO SE PUEDE CAER (POSTS O COMMENTS)!!!!!
-            // Supongo que en ese caso simplemente fallo maybe? O que onda?? Hay que pensar bien como
-            // manejar esto... Pero a priori tal vez lo mas facil es contestar que no estamos disponibles supongo
-            // y chau no?
+            to.write_all(&chunk)?;
             sent += chunk_to_read as u64;
             if sent >= file_size { break; }
         }
