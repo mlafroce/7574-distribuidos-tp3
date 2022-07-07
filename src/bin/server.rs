@@ -16,6 +16,9 @@ use envconfig::Envconfig;
 use signal_hook::consts::SIGTERM;
 use signal_hook::iterator::Signals;
 use std::time::SystemTime;
+use tp2::health_checker::health_base::HealthBase;
+use tp2::health_checker::health_answerer::HealthAnswerer;
+use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
 
 fn main() {
     println!("Server started");
@@ -51,10 +54,12 @@ impl Server {
     pub fn run(&self, config: &Config) {
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_for_signals_thread = shutdown.clone();
-        let signals_thread = spawn(move || {
+        let sigterm_handler_join = spawn(move || {
             handle_sigterm(shutdown_for_signals_thread.clone());
         });
-
+        let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
+        let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
+        let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
         let listener = TcpListener::bind(self.server_address.clone()).expect(&*format!("Could not bind to address: {}", self.server_address));
         listener.set_nonblocking(true).expect("Could not set non blocking to true");
         for client in listener.incoming() {
@@ -77,7 +82,9 @@ impl Server {
                 break;
             }
         }
-        signals_thread.join().expect("Failed to join signals thread");
+        shutdown.store(true, Ordering::Relaxed);
+        health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+        sigterm_handler_join.join().expect("Failed to join handle_sigterm");
     }
 
     fn handle_client(&self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
