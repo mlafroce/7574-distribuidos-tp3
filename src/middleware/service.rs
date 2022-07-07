@@ -80,6 +80,7 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
             let mut stream_finished = run_once;
             info!("Loading state");
             let state = self.transaction_log.load_state::<M::State>().unwrap_or_default();
+            info!("state: {:?}", state);
             self.message_processor.set_state(state);
             let mut checkpoint = self.transaction_log.load_checkpoint::<M::State>().unwrap_or(Checkpoint::Clean);
             if matches!(checkpoint, Checkpoint::ServiceFinished) {

@@ -44,6 +44,17 @@ struct PostSentimentCalculator {
 
 impl MessageProcessor for PostSentimentCalculator {
     type State = HashMap<String, (f32, i32)>;
+
+    fn set_state(&mut self, state: Self::State) {
+        info!("PostSentimentFilter | retrieving state: {:?}", state.len());
+        self.ids = state;
+    }
+
+    fn get_state(&self) -> Option<Self::State> {
+        info!("PostSentimentFilter | saving state: {:?}", self.ids.len());
+        Some(self.ids.clone())
+    }
+    
     fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostIdSentiment(post_id, sentiment) => {
