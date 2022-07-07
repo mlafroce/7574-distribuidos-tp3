@@ -43,12 +43,12 @@ fn main() {
     let ouput_clone = output.clone();
     let mut election = LeaderElection::new(process_id, output, N_MEMBERS);
     let election_clone = election.clone();
-    input_clone = input.clone();
     shutdown_clone = shutdown.clone();
     let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone, shutdown_clone));
     input_clone = input.clone();
     got_pong_clone = got_pong.clone();
     tcp_connect(process_id, input_clone, sockets_lock_clone_2, N_MEMBERS, got_pong_clone);
+    input_clone = input.clone();
     let output_processor = thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_3));
     let input_processor = thread::spawn(move || process_input(election_clone, input));
     // End Leader
@@ -83,12 +83,16 @@ fn main() {
         thread::sleep(Duration::from_secs(5));
     }
 
-    println!("joining tcp_listener ");
+    input_clone.close();
+
     if let Ok(_) = tcp_listener.join() {
         println!("tcp_listener joined");
     }
+
+    if let Ok(_) = input_processor.join() {
+        println!("input_processor joined")
+    }
     
-    input_processor.join().unwrap();
     output_processor.join().unwrap();
     signals_thread.join().unwrap();
     

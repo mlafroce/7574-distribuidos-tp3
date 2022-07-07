@@ -20,13 +20,17 @@ impl Socket {
         }
     }
 
-    pub fn read(&mut self, n: usize) -> Vec<u8> {
+    pub fn read(&mut self, n: usize) -> Result<Vec<u8>, String> {
         let mut n_received = 0;
         let mut received: Vec<u8> = vec![];
         let mut received_chunk = [0u8; CHUNK_SIZE];
 
         loop {
             let n_bytes = self.stream.read(&mut received_chunk).unwrap();
+            
+            if n_bytes == 0 {
+                return Err("socket closed".to_string());
+            }
 
             n_received += n_bytes;
 
@@ -37,7 +41,7 @@ impl Socket {
             }
         }
 
-        return received;
+        return Ok(received);
     }
 
     pub fn write(&mut self, buffer: &Vec<u8>) {

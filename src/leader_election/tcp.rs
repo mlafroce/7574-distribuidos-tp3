@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     mem::size_of,
     net::{TcpListener, TcpStream},
-    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Condvar, Mutex, RwLock, },
+    sync::{atomic::AtomicBool, atomic::Ordering, Arc, Condvar, Mutex, RwLock},
     thread,
     time::Duration,
 };
@@ -43,9 +43,11 @@ pub fn is_leader_alive(
 
 const PORT: &str = "1234";
 
-fn tcp_receive_id(socket: &mut Socket) -> usize {
-    let buffer = socket.read(size_of::<usize>());
-    return usize::from_le_bytes(buffer.try_into().unwrap());
+fn tcp_receive_id(socket: &mut Socket) -> Option<usize> {
+    if let Ok(buffer) = socket.read(size_of::<usize>()) {
+        return Some(usize::from_le_bytes(buffer.try_into().unwrap()));
+    }
+    None
 }
 
 fn send_id(id: usize, socket: &mut Socket) {
@@ -87,25 +89,27 @@ fn send_msg(socket: &mut Socket, opcode: u8, id: usize) {
     socket.write(&msg);
 }
 
-fn receive(socket: &mut Socket) -> (u8, (u8, usize)) {
+fn tcp_receive_message(socket: &mut Socket) -> Option<(u8, (u8, usize))> {
     println!("receive");
-    let layercode_buffer = socket.read(1);
-    let layercode = layercode_buffer[0];
-    println!("layercode: {}", layercode);
+    if let Ok(layercode_buffer) = socket.read(1) {
+        let layercode = layercode_buffer[0];
+        println!("layercode: {}", layercode);
 
-    if layercode == 0 {
-        let ping_or_pong_buffer = socket.read(1);
-        let ping_or_pong = ping_or_pong_buffer[0];
+        if layercode == 0 {
+            if let Ok(ping_or_pong_buffer) = socket.read(1) {
+                let ping_or_pong = ping_or_pong_buffer[0];
 
-        return (0, (ping_or_pong, 0));
-    } else {
-        let buffer = socket.read(1 + size_of::<usize>());
-
-        let opcode = buffer[0];
-        let peer_id = usize::from_le_bytes(buffer[1..].try_into().unwrap());
-
-        return (1, (opcode, peer_id));
+                return Some((0, (ping_or_pong, 0)));
+            }
+        } else {
+            if let Ok(buffer) = socket.read(1 + size_of::<usize>()) {
+                let opcode = buffer[0];
+                let peer_id = usize::from_le_bytes(buffer[1..].try_into().unwrap());
+                return Some((1, (opcode, peer_id)));
+            }
+        }
     }
+    None
 }
 
 fn tcp_receive_messages(
@@ -118,26 +122,29 @@ fn tcp_receive_messages(
 
     loop {
         println!("receiving msgs | begin");
-        let msg = receive(socket);
-        println!("receiving msgs | received: {:?}", msg);
-
-        match msg.0 {
-            0 => {
-                if msg.1 .0 == 0 {
-                    println!("received PING");
-                    send_msg_pong(socket);
-                }
-                if msg.1 .0 == 1 {
-                    println!("received PONG");
-                    *got_pong.0.lock().unwrap() = true;
-                    got_pong.1.notify_all();
+        match tcp_receive_message(socket) {
+            Some(msg) => {
+                println!("receiving msgs | received: {:?}", msg);
+                match msg.0 {
+                    0 => {
+                        if msg.1 .0 == 0 {
+                            println!("received PING");
+                            send_msg_pong(socket);
+                        }
+                        if msg.1 .0 == 1 {
+                            println!("received PONG");
+                            *got_pong.0.lock().unwrap() = true;
+                            got_pong.1.notify_all();
+                        }
+                    }
+                    1 => {
+                        let msg_ = msg.1;
+                        input.push((msg_.1, msg_.0))
+                    }
+                    _ => {}
                 }
             }
-            1 => {
-                let msg_ = msg.1;
-                input.push((msg_.1, msg_.0))
-            }
-            _ => {}
+            None => break,
         }
     }
 }
@@ -149,7 +156,7 @@ pub fn tcp_listen(
     got_pong: Arc<(Mutex<bool>, Condvar)>,
     shutdown: Arc<AtomicBool>,
 ) {
-    let mut threads = Vec::new();
+    let mut tcp_receivers = Vec::new();
 
     let listener;
     match TcpListener::bind(format!("task_management_{}:{}", process_id, PORT)) {
@@ -171,15 +178,16 @@ pub fn tcp_listen(
             Ok(stream) => {
                 let mut socket = Socket::new(stream);
                 let socket_clone = socket.clone();
-                let from_id = tcp_receive_id(&mut socket);
-                if let Ok(mut sockets) = sockets_lock.write() {
-                    sockets.insert(from_id, socket_clone);
+                if let Some(from_id) = tcp_receive_id(&mut socket) {
+                    if let Ok(mut sockets) = sockets_lock.write() {
+                        sockets.insert(from_id, socket_clone);
+                    }
+                    let got_pong_clone = got_pong.clone();
+                    tcp_receivers.push(thread::spawn(move || {
+                        tcp_receive_messages(from_id, &mut socket, vector_clone, got_pong_clone)
+                    }));
+                    vector_clone = vector.clone();
                 }
-                let got_pong_clone = got_pong.clone();
-                threads.push(thread::spawn(move || {
-                    tcp_receive_messages(from_id, &mut socket, vector_clone, got_pong_clone)
-                }));
-                vector_clone = vector.clone();
             }
             Err(_) => {
                 if shutdown_clone.load(Ordering::Relaxed) {
@@ -192,9 +200,13 @@ pub fn tcp_listen(
         }
     }
 
-    for thread in threads {
-        thread.join().unwrap();
+    for tcp_receiver in tcp_receivers {
+        if let Ok(_) = tcp_receiver.join() {
+            println!("tcp_receive_messages joined");
+        }
     }
+
+    println!("tcp_listen exit gracefully");
 }
 
 pub fn tcp_connect(
@@ -237,12 +249,19 @@ pub fn tcp_connect(
 
 pub fn process_input(leader_election: LeaderElection, input: Vector<(usize, u8)>) {
     loop {
-        if let Ok(msg_option) = input.pop() {
-            if let Some(msg) = msg_option {
-                leader_election.process_msg(msg);
+        match input.pop() {
+            Ok(msg_option) => {
+                if let Some(msg) = msg_option {
+                    leader_election.process_msg(msg);
+                }
+            }
+            Err(_) => {
+                break;
             }
         }
     }
+
+    println!("process_input exit gracefully")
 }
 
 pub fn process_output(
