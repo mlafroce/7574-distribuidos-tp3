@@ -1,6 +1,6 @@
 use std::{
     io::{Read, Write},
-    net::{Shutdown, TcpStream}
+    net::TcpStream,
 };
 
 const CHUNK_SIZE: usize = 1;
@@ -46,9 +46,5 @@ impl Socket {
 
     pub fn write(&mut self, buffer: &Vec<u8>) {
         self.stream.write_all(buffer).unwrap()
-    }
-
-    pub fn shutdown(&self) {
-        self.stream.shutdown(Shutdown::Both).unwrap();
     }
 }
