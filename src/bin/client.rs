@@ -51,8 +51,8 @@ pub fn receive_results(connection:&mut TcpStream) {
     let mut college_posts = vec![];
     loop {
         let msg = read_string(connection);
-        if msg == "FINISHED" || msg == "Server not available" {
-            println!("Received: {}", msg);
+        if msg == "FINISHED" || msg == "Server not available" || msg == "" {
+            println!("Received end: {}", msg);
             break;
         }
         println!("College post: {:?}", msg);
