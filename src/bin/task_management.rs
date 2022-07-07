@@ -62,14 +62,14 @@ fn main() {
     shutdown_clone = shutdown.clone();
     loop {
         if election.am_i_leader() {
-            println!("leader");
+            // println!("leader");
             if !running_service {
                 running_service = true;
                 task_manager_handler = Some(thread::spawn(move || task_management_clone.run()));
                 task_management_clone = task_management.clone()
             }
         } else {
-            println!("not leader");
+            // println!("not leader");
             if let Some(leader_id) = election.get_leader_id() {
                 sockets_lock_clone_3 = sockets_lock.clone();
                 got_pong_clone = got_pong.clone();

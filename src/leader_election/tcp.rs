@@ -15,7 +15,7 @@ pub fn is_leader_alive(
 ) -> bool {
     let mut leader_alive = false;
 
-    println!("send ping: start");
+    // println!("send ping: start");
     if let Ok(mut sockets) = sockets_lock.write() {
         if let Some(socket) = sockets.get_mut(&leader_id) {
             send_msg_ping(socket);
@@ -29,7 +29,7 @@ pub fn is_leader_alive(
     ) {
         Ok(got_ok) => {
             if *got_ok.0 {
-                println!("PONG detected");
+                // println!("PONG detected");
                 leader_alive = true;
             }
         }
@@ -116,20 +116,20 @@ fn tcp_receive_messages(
     input: Vector<(usize, u8)>,
     got_pong: Arc<(Mutex<bool>, Condvar)>,
 ) {
-    println!("receiving msgs | from: {}", from_id);
+    // println!("receiving msgs | from: {}", from_id);
 
     loop {
         match tcp_receive_message(socket) {
             Some(msg) => {
-                println!("receiving msgs | received: {:?}", msg);
+                // println!("receiving msgs | received: {:?}", msg);
                 match msg.0 {
                     0 => {
                         if msg.1.0 == 0 {
-                            println!("received PING");
+                            // println!("received PING");
                             send_msg_pong(socket);
                         }
                         if msg.1.0 == 1 {
-                            println!("received PONG");
+                            // println!("received PONG");
                             *got_pong.0.lock().unwrap() = true;
                             got_pong.1.notify_all();
                         }
