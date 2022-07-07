@@ -1,4 +1,3 @@
-results_consumer
 post_producer
 comment_producer
 best_meme_filter
