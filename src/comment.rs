@@ -72,7 +72,7 @@ impl CommentIterator {
     pub fn from_stream(stream: TcpStream) -> Self {
         let reader = ReaderBuilder::new()
             .has_headers(true)
-            .from_reader(stream); // TODO: --> Que pasa si se cae la conexion??
+            .from_reader(stream);
         Self { reader }
     }
 }
