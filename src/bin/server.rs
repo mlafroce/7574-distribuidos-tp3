@@ -15,8 +15,6 @@ use envconfig::Envconfig;
 use signal_hook::consts::SIGTERM;
 use signal_hook::iterator::Signals;
 
-const N_RESULTS: usize = 1;
-
 fn main() {
     println!("Server started");
     let env_config = Config::init_from_env().unwrap();
@@ -167,15 +165,14 @@ impl Server {
         let queue = channel.queue_declare(RESULTS_QUEUE_NAME, options)?;
 
         // Query results
-        let mut count = 0;
         let mut results = Results::default();
         let mut data_received = (false, false, false);
         let consumer = queue.consume(ConsumerOptions::default())?;
         let consumer = DeliveryConsumer::new(consumer);
         let buf_consumer = BufConsumer::new(consumer);
         info!("Starting iteration");
-        for (bulk, delivery) in buf_consumer {
-            for message in bulk {
+        for compound_delivery in buf_consumer {
+            for message in compound_delivery.data {
                 match message {
                     Message::PostScoreMean(mean) => {
                         info!("got mean: {:?}", mean);
@@ -190,24 +187,25 @@ impl Server {
                     Message::CollegePostUrl(url) => {
                         results.college_posts.push(url);
                     }
-                    Message::EndOfStream => {
+                    Message::EndOfStream => {}
+                    Message::CollegePostEnded => {
                         info!("College posts ended");
-                        count += 1;
-                        if count == N_RESULTS {
-                            data_received.2 = true;
-                        }
+                        data_received.2 = true;
                     }
+                    Message::Confirmed  => {}
                     _ => {
                         error!("Invalid message arrived {:?}", message);
                     }
                 }
             }
-            delivery.ack(&channel)?;
+            compound_delivery.msg_delivery.ack(&channel)?;
+            compound_delivery.confirm_delivery.ack(&channel)?;
             if data_received.0 && data_received.1 && data_received.2 {
                 break;
             }
         }
         info!("Exit");
+        let _ = connection.close();
         Ok(results)
     }
 
