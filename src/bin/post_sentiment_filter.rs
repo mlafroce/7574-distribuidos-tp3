@@ -2,6 +2,7 @@ use amiquip::Result;
 use envconfig::Envconfig;
 use log::{info, warn};
 use std::collections::HashSet;
+use std::ops::Add;
 use tp2::messages::Message;
 use tp2::middleware::message_processor::MessageProcessor;
 use tp2::middleware::service::RabbitService;
@@ -36,11 +37,14 @@ fn run_service(config: Config) -> Result<()> {
     let ids = get_posts_ids_with_url(&config)?;
     info!("Filtering sentiments with url");
     let mut processor = PostSentimentFilter { ids };
+    let consumer_transaction_log_path = config.transaction_log_path.clone().add(".subservice");
     let mut service = RabbitService::new(config, &mut processor);
     service.run(
         POST_ID_SENTIMENT_QUEUE_NAME,
         Some(FILTERED_POST_ID_SENTIMENT_QUEUE_NAME.to_string()),
-    )
+    )?;
+    std::fs::remove_file(consumer_transaction_log_path);
+    Ok(())
 }
 
 struct PostSentimentFilter {
@@ -89,5 +93,5 @@ fn get_posts_ids_with_url(config: &Config) -> Result<HashSet<String>> {
     let mut processor = PostIdWithUrlConsumer::default();
     let mut service = RabbitService::new_subservice(config, &mut processor);
     service.run(POST_ID_WITH_URL_QUEUE_NAME, None)?;
-    Ok(processor.ids)
+    Ok(processor.ids.clone())
 }

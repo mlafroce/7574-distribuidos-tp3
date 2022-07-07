@@ -1,6 +1,7 @@
 use amiquip::Result;
 use log::{info, warn};
 use std::collections::HashSet;
+use std::ops::Add;
 use tp2::messages::Message;
 use tp2::middleware::message_processor::MessageProcessor;
 use tp2::middleware::service::{init, RabbitService};
@@ -31,11 +32,14 @@ fn run_service(config: Config) -> Result<()> {
     let mut processor = PostCollegeFilter { ids };
     // FIX: Seems that closing and opening a connection so fast crashes the app, putting a sleep
     std::thread::sleep(std::time::Duration::from_secs(1));
+    let consumer_transaction_log_path = config.transaction_log_path.clone().add(".subservice");
     let mut service = RabbitService::new(config, &mut processor);
     service.run(
         POST_URL_AVERAGE_QUEUE_NAME,
         Some(RESULTS_QUEUE_NAME.to_string()),
-    )
+    )?;
+    std::fs::remove_file(consumer_transaction_log_path);
+    Ok(())
 }
 
 struct PostCollegeFilter {

@@ -1,9 +1,7 @@
 use crate::messages::Message;
 use crate::middleware::consumer::DeliveryConsumer;
 use amiquip::Delivery;
-use log::{info, warn};
-
-// TODO:  Crear clase StatefulConsumer
+use log::warn;
 
 pub struct BufConsumer<'a> {
     consumer: DeliveryConsumer<'a>,
@@ -26,7 +24,6 @@ impl<'a> BufConsumer<'a> {
         let mut confirm_message = bincode::deserialize::<Message>(&confirm_delivery.body).unwrap();
         while ! matches!(confirm_message, Message::Confirmed) {
             warn!("Second message is not a confirm, must be a repeated msg");
-            info!("{:?}", confirm_message);
             self.consumer.ack(msg_delivery).ok()?;
             msg_delivery = confirm_delivery;
             confirm_delivery = self.consumer.next()?;

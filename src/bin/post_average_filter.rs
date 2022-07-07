@@ -1,3 +1,4 @@
+use std::ops::Add;
 use amiquip::Result;
 use log::{info, warn};
 use tp2::messages::Message;
@@ -30,6 +31,7 @@ fn run_service(config: Config) -> Result<()> {
     let mut processor = PostAverageConsumer::default();
     let mut consumer = RabbitService::new_subservice(config.clone(), &mut processor);
     consumer.run_once(POST_SCORE_AVERAGE_QUEUE_NAME, None)?;
+    let consumer_transaction_log_path = config.transaction_log_path.clone().add(".subservice");
     if let Some(score_average) = processor.score_average {
         info!("Filtering above average");
         let mut processor = PostAverageFilter { score_average };
@@ -39,11 +41,12 @@ fn run_service(config: Config) -> Result<()> {
         service.run(
             POST_COLLEGE_QUEUE_NAME,
             Some(POST_URL_AVERAGE_QUEUE_NAME.to_string()),
-        )
+        )?;
+        std::fs::remove_file(&consumer_transaction_log_path);
     } else {
         warn!("Couldn't pop score average");
-        Ok(())
     }
+    Ok(())
 }
 
 struct PostAverageFilter {

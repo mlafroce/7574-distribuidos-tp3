@@ -1,3 +1,4 @@
+use std::ops::Add;
 use amiquip::Result;
 use log::{debug, error, info, warn};
 use tp2::messages::Message;
@@ -29,16 +30,19 @@ fn main() -> Result<()> {
 fn run_service(config: Config) -> Result<()> {
     info!("Getting best meme id");
     let mut id_processor = BestMemeIdConsumer::default();
-    let mut service = RabbitService::new_subservice(config.clone(), &mut id_processor);
-    service.run_once(POST_SENTIMENT_MEAN_QUEUE_NAME, None)?;
+    let mut subservice = RabbitService::new_subservice(config.clone(), &mut id_processor);
+    subservice.run_once(POST_SENTIMENT_MEAN_QUEUE_NAME, None)?;
     info!("Got sentiment {:?}", id_processor.best_meme_id_sentiment);
     let best_meme_id = id_processor.best_meme_id_sentiment.0;
     // FIX: Seems that closing and opening a connection so fast crashes the app, putting a sleep
     std::thread::sleep(std::time::Duration::from_secs(1));
+    let consumer_transaction_log_path = config.transaction_log_path.clone().add(".subservice");
     info!("Getting best meme");
     let mut processor = BestMemeFilter::new(best_meme_id);
     let mut service = RabbitService::new(config, &mut processor);
-    service.run(POST_EXTRACTED_URL_QUEUE_NAME, None)
+    service.run(POST_EXTRACTED_URL_QUEUE_NAME, None)?;
+    std::fs::remove_file(&consumer_transaction_log_path);
+    Ok(())
 }
 
 struct BestMemeFilter {

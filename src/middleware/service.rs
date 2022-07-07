@@ -50,6 +50,7 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
     pub fn new_subservice(mut config: Config, message_processor: &'a mut M) -> Self {
         config.transaction_log_path = config.transaction_log_path.add(".subservice");
         let transaction_log = TransactionLog::new(&config.transaction_log_path).unwrap();
+        info!("New transaction log: {:?}", config.transaction_log_path);
         Self {
             config,
             message_processor,
@@ -81,21 +82,26 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
             let state = self.transaction_log.load_state::<M::State>().unwrap_or_default();
             self.message_processor.set_state(state);
             let mut checkpoint = self.transaction_log.load_checkpoint::<M::State>().unwrap_or(Checkpoint::Clean);
+            if matches!(checkpoint, Checkpoint::ServiceFinished) {
+                return Ok(());
+            }
             info!("Consuming queue");
+            let mut bomb_planted = false;
             for compound_delivery in buf_consumer {
                 let mut bulk_builder = BulkBuilder::default();
                 if matches!(checkpoint, Checkpoint::Clean) {
                     for message in compound_delivery.data {
                         match message {
                             Message::EndOfStream => {
-                                stream_finished = exchange.end_of_stream()?;
-                                if stream_finished {
-                                    bulk_builder.push(&Message::EndOfStream);
-                                    if let Some(result) =
-                                        self.message_processor.on_stream_finished()
-                                    {
-                                        bulk_builder.push(&result);
-                                    }
+                                stream_finished = true;
+                                info!("Stream finished, pushing EOS");
+                                bulk_builder.push(&Message::EndOfStream);
+
+                                if let Some(result) =
+                                    self.message_processor.on_stream_finished()
+                                {
+                                    info!("pushing Result {:?}", result);
+                                    bulk_builder.push(&result);
                                 }
                             }
                             _ => {
@@ -107,6 +113,9 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                             }
                         }
                     }
+                    if bomb_planted {
+                        //panic!("Bombed!");
+                    }
                     if let Some(state) = self.message_processor.get_state() {
                         self.transaction_log.save_state(state).unwrap(); //writeTransactionLog(State, "processed")
                     }
@@ -116,7 +125,7 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                     self.message_processor
                         .send_process_output(&mut exchange, output)?;
                     self.transaction_log.save_sent().unwrap();
-                    exchange.send(&Message::Confirmed);
+                    exchange.send(&Message::Confirmed)?;
                     self.transaction_log.save_confirmed().unwrap();
                 }
 
@@ -130,11 +139,14 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                 if stream_finished {
                     if !self.is_subservice {
                         self.transaction_log.delete_log().unwrap();
+                    } else {
+                        self.transaction_log.save_service_finished().unwrap();
                     }
                     break
                 }
-                self.transaction_log.save_clean();
+                self.transaction_log.save_clean().unwrap();
                 checkpoint = Checkpoint::Clean;
+                bomb_planted = true;
             }
         }
         info!("Exit");

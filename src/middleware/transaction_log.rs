@@ -12,7 +12,7 @@ pub enum Checkpoint<S> where S: std::clone::Clone {
     Sent,
     Confirmed,
     EndOfStream,
-    EndOfStreamConfirmed,
+    ServiceFinished,
 }
 
 pub struct TransactionLog {
@@ -67,7 +67,7 @@ impl TransactionLog {
         }
     }
 
-    pub fn delete_log(&mut self) -> io::Result<()> {
+    pub fn delete_log(&self) -> io::Result<()> {
         //drop(self.log);
         std::fs::remove_file(&self.path)
     }
@@ -91,6 +91,10 @@ impl TransactionLog {
 
     pub fn save_end_of_stream(&mut self) -> io::Result<()> {
         self.save_checkpoint::<()>(Checkpoint::EndOfStream)
+    }
+
+    pub fn save_service_finished(&mut self) -> io::Result<()> {
+        self.save_checkpoint::<()>(Checkpoint::ServiceFinished)
     }
 
     fn save_checkpoint<S: Serialize + std::clone::Clone>(&mut self, checkpoint: Checkpoint<S>) -> io::Result<()> {
