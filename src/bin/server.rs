@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, thread};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::Shutdown::Both;
@@ -26,6 +26,9 @@ fn main() {
     let server = Server::new(config.chunk_size, config.server_address, config.posts_producer_address, config.comments_producer_address);
     server.run(&env_config);
 }
+
+const MAX_TRIES_FOR_COMMENT_PRODUCER_CONNECTOR: u64 = 10;
+const SEC_BETWEEN_RETRIES_FOR_COMMENT: u64 = 30;
 
 pub struct Server {
     chunk_size: u64,
@@ -111,25 +114,62 @@ impl Server {
     }
 
     fn handle_client(&self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
-        // HAY QUE MANEJAR BIEN LOS ERRORES DE ACA!!! NO ALCANZA CON UN "?" PORQUE EN TAL CASO VA A
-        // PASAR QUE POSIBLEMENTE MANDE POSTS Y NO CMMENTS Y POR ENDE QUEDE TRABADO. O BIEN QUE EL
-        // RESULTADO DEL SIGUIENTE CLIENTE ESTE MAL!!!!!!!!!!!
         println!("Forwarding posts");
+        let mut got_any_error = false;
+        // Can safely exit if post_producer connection fails
         let mut post_producer_stream = TcpStream::connect(self.posts_producer_address.clone())?;
-        self.forward_file(stream, &mut post_producer_stream)?;
-        post_producer_stream.shutdown(Both)?;
+        match self.forward_file(stream, &mut post_producer_stream) {
+            Ok(_) => {}
+            Err(e) => {
+                got_any_error = true;
+                error!("Got error {:?} while forwarding file", e);
+            }
+        };
+        // Don't care what error got as long as socket closes
+        let _ = post_producer_stream.shutdown(Both);
         println!("Forwarding comments");
-        let mut comment_producer_stream = TcpStream::connect(self.comments_producer_address.clone())?;
-        self.forward_file(stream, &mut comment_producer_stream)?;
-        comment_producer_stream.shutdown(Both)?;
+        let mut connected_to_comment_producer = false;
+        let mut tries = MAX_TRIES_FOR_COMMENT_PRODUCER_CONNECTOR;
+        // This is the tricky part, we need to get at least a successful connect with the comment producer,
+        // so that we don't leave the services on an invalid state. This is because we need to trigger the EndOfStream by triggering
+        // and EOF on the producer.
+        while !connected_to_comment_producer {
+            match TcpStream::connect(self.comments_producer_address.clone()) {
+                Ok(mut comment_producer_stream) => {
+                    connected_to_comment_producer = true;
+                    match self.forward_file(stream, &mut comment_producer_stream) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            got_any_error = true;
+                            error!("Got error {:?} while forwarding file", e);
+                        }
+                    }
+                    // Same as before
+                    let _ = comment_producer_stream.shutdown(Both);
+                }
+                Err(e) => {
+                    error!("Failed to connect to comment producer: {:?}. Will retry", e);
+                    tries -= 1;
+                    if tries == 0 {
+                        self.answer_not_available(stream);
+                        // If reached this point, something REALLY bad happened and the whole system
+                        // is in an invalid state...
+                        panic!("We should never reach this point right? RIGHT!?");
+                    }
+                    thread::sleep(Duration::from_secs(SEC_BETWEEN_RETRIES_FOR_COMMENT));
+                }
+            }
+        }
         println!("Waiting for response");
         return match self.wait_for_results(config) {
             Ok(results) => {
+                if got_any_error {
+                    return Err(Error::new(ErrorKind::Other, "Something went wrong. Check the logs. Answering not available"));
+                }
                 println!("Best meme received: {:?}", results.best_meme);
                 println!("Score mean received: {:?}", results.score_mean);
                 println!("College posts received: {:?}", results.college_posts.len());
                 self.send_results_to_client(stream, &results)?;
-                let _ = stream.shutdown(Shutdown::Both);
                 Ok(())
             }
             Err(_) => {
