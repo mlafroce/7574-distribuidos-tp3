@@ -32,16 +32,10 @@ pub enum Message {
     PostUrl(String, String),
     PostIdSentiment(String, f32),
     CollegePostUrl(String),
+    CollegePostEnded,
     DataToSave(String, String),
     BulkMessage(Vec<u8>, Vec<usize>),
-
-    DataScore(Score),
-    DataPostSentiment(PostSentiment),
-    DataBestMeme(BestMeme),
-    DataScoreAverage(f32),
-    DataPostIdCollege(String),
-    DataPostId(String),
-    DataReset(String),
+    Confirmed
 }
 
 #[derive(Default, Debug)]
@@ -51,7 +45,7 @@ pub struct BulkBuilder {
 }
 
 impl BulkBuilder {
-    pub fn push<T: Serialize>(&mut self, message: &T) {
+    pub fn push<T: Serialize + std::fmt::Debug>(&mut self, message: &T) {
         let mut data = bincode::serialize(&message).unwrap();
         self.data_sizes.push(data.len());
         self.data_buf.append(&mut data);

@@ -2,11 +2,12 @@ use std::fmt::Debug;
 use crate::messages::Message;
 use crate::middleware::RabbitExchange;
 use amiquip::Result;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 
 pub trait MessageProcessor {
-    type State: Serialize + Debug;
+    type State: Serialize + DeserializeOwned + Debug + std::clone::Clone + std::default::Default;
 
     fn process_message(&mut self, message: Message) -> Option<Message>;
 
@@ -23,4 +24,6 @@ pub trait MessageProcessor {
     }
 
     fn get_state(&self) -> Option<Self::State> { None }
+
+    fn set_state(&mut self, _state: Self::State) {}
 }

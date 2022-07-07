@@ -44,17 +44,15 @@ impl MessageProcessor for UrlExtractor {
         None
     }
 
-    fn on_stream_finished(&self) -> Option<Message> {
-        Some(Message::EndOfStream)
-    }
-
     fn send_process_output<E: RabbitExchange>(
         &self,
         exchange: &mut E,
         message: Message,
     ) -> Result<()> {
         exchange.send_with_key(&message, POST_EXTRACTED_URL_QUEUE_NAME)?;
-        exchange.send_with_key(&message, POST_ID_WITH_URL_QUEUE_NAME)
+        exchange.send_with_key(&Message::Confirmed, POST_EXTRACTED_URL_QUEUE_NAME)?;
+        exchange.send_with_key(&message, POST_ID_WITH_URL_QUEUE_NAME)?;
+        exchange.send_with_key(&Message::Confirmed, POST_ID_WITH_URL_QUEUE_NAME)
     }
 }
 

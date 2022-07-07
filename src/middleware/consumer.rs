@@ -12,6 +12,10 @@ impl<'a> DeliveryConsumer<'a> {
     pub fn new(consumer: Consumer<'a>) -> Self {
         Self { consumer }
     }
+
+    pub fn ack(&self, delivery: Delivery) -> amiquip::Result<()> {
+        self.consumer.ack(delivery)
+    }
 }
 
 impl Iterator for DeliveryConsumer<'_> {
