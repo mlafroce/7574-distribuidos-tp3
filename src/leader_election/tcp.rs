@@ -226,12 +226,9 @@ pub fn tcp_connect(
 
     let members: Vec<usize> = (0..n_members).collect();
 
-    for peer_id in members[process_id..].iter() {
+    for peer_id in members[(process_id + 1)..].iter() {
         let peer_id_clone = peer_id.clone();
 
-        if *peer_id == process_id {
-            continue;
-        }
         loop {
             if let Ok(stream) = TcpStream::connect(&format!("task_management_{}:{}", peer_id, PORT))
             {
