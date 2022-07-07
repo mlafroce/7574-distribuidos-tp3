@@ -1,13 +1,19 @@
 use std::io;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::{Error, ErrorKind, Read, Write};
+use std::sync::Arc;
 use amiquip::{Connection, ConsumerOptions, QueueDeclareOptions, Result};
 use tp2::{Config, RESULTS_QUEUE_NAME};
 use tp2::middleware::buf_consumer::BufConsumer;
 use tp2::middleware::consumer::DeliveryConsumer;
 use tp2::messages::Message;
 use log::{debug, error, info};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::spawn;
+use std::time::Duration;
 use envconfig::Envconfig;
+use signal_hook::consts::SIGTERM;
+use signal_hook::iterator::Signals;
 
 const N_RESULTS: usize = 1;
 
@@ -43,7 +49,14 @@ impl Server {
     }
 
     pub fn run(&self, config: &Config) {
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_for_signals_thread = shutdown.clone();
+        let signals_thread = spawn(move || {
+            handle_sigterm(shutdown_for_signals_thread.clone());
+        });
+
         let listener = TcpListener::bind(self.server_address.clone()).expect(&*format!("Could not bind to address: {}", self.server_address));
+        listener.set_nonblocking(true).expect("Could not set non blocking to true");
         for client in listener.incoming() {
             match client {
                 Ok(mut stream) => {
@@ -54,12 +67,17 @@ impl Server {
                             self.answer_not_available(&mut stream);
                         }
                     }
-                }
-                Err(e) => {
+                } Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_secs(1));
+                }  Err(e) => {
                     println!("Failed to accept client. Error: {:?}", e);
                 }
             }
+            if shutdown.load(Ordering::Relaxed) {
+                break;
+            }
         }
+        signals_thread.join().expect("Failed to join signals thread");
     }
 
     fn handle_client(&self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
@@ -255,4 +273,17 @@ struct Results {
     best_meme: String,
     score_mean: f32,
     college_posts: Vec<String>,
+}
+
+fn handle_sigterm(shutdown: Arc<AtomicBool>) {
+    println!("HANDLE SIGTERM");
+    let mut signals = Signals::new(&[SIGTERM]).expect("Failed to register SignalsInfo");
+    for sig in signals.forever() {
+        println!("RECEIVED SIGNAL {}", sig);
+        if sig == SIGTERM {
+            println!("ENTERED IF {}", sig);
+            shutdown.store(true, Ordering::Relaxed);
+            break;
+        }
+    }
 }
