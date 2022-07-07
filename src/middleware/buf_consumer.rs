@@ -21,15 +21,16 @@ impl<'a> BufConsumer<'a> {
     fn recv_messages(&mut self) -> Option<CompoundDelivery> {
         let mut msg_delivery = self.consumer.next()?;
         let mut confirm_delivery = self.consumer.next()?;
+        let mut message = bincode::deserialize::<Message>(&msg_delivery.body).unwrap();
         let mut confirm_message = bincode::deserialize::<Message>(&confirm_delivery.body).unwrap();
-        while ! matches!(confirm_message, Message::Confirmed) {
+        while ! matches!(confirm_message, Message::Confirmed) || matches!(message, Message::Confirmed) {
             warn!("Second message is not a confirm, must be a repeated msg");
             self.consumer.ack(msg_delivery).ok()?;
             msg_delivery = confirm_delivery;
             confirm_delivery = self.consumer.next()?;
+            message = confirm_message;
             confirm_message = bincode::deserialize::<Message>(&confirm_delivery.body).unwrap();
         }
-        let message = bincode::deserialize::<Message>(&msg_delivery.body).unwrap();
         let mut messages = Vec::new();
         if let Message::BulkMessage(bulk, messages_sizes) = message {
             let mut offset = 0;
