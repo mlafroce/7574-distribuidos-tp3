@@ -1,6 +1,7 @@
 use std::io;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::io::{Error, ErrorKind, Read, Write};
+use std::net::Shutdown::Both;
 use std::sync::Arc;
 use amiquip::{Connection, ConsumerOptions, QueueDeclareOptions, Result};
 use tp2::{Config, RESULTS_QUEUE_NAME};
@@ -82,9 +83,12 @@ impl Server {
         println!("Forwarding posts");
         let mut post_producer_stream = TcpStream::connect(self.posts_producer_address.clone())?;
         self.forward_file(stream, &mut post_producer_stream)?;
+        post_producer_stream.shutdown(Both)?;
         println!("Forwarding comments");
         let mut comment_producer_stream = TcpStream::connect(self.comments_producer_address.clone())?;
         self.forward_file(stream, &mut comment_producer_stream)?;
+        comment_producer_stream.shutdown(Both)?;
+        println!("Waiting for response");
         return match self.wait_for_results(config) {
             Ok(results) => {
                 println!("Best meme received: {:?}", results.best_meme);
