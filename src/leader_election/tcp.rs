@@ -14,6 +14,7 @@ pub fn is_leader_alive(
     got_pong: Arc<(Mutex<bool>, Condvar)>,
 ) -> bool {
     let mut leader_alive = false;
+
     println!("send ping: start");
     if let Ok(mut sockets) = sockets_lock.write() {
         if let Some(socket) = sockets.get_mut(&leader_id) {
@@ -127,11 +128,11 @@ fn tcp_receive_messages(
                 println!("receiving msgs | received: {:?}", msg);
                 match msg.0 {
                     0 => {
-                        if msg.1 .0 == 0 {
+                        if msg.1.0 == 0 {
                             println!("received PING");
                             send_msg_pong(socket);
                         }
-                        if msg.1 .0 == 1 {
+                        if msg.1.0 == 1 {
                             println!("received PONG");
                             *got_pong.0.lock().unwrap() = true;
                             got_pong.1.notify_all();

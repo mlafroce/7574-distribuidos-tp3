@@ -78,11 +78,16 @@ fn main() {
             }
         }
 
-        if shutdown_clone.load(Ordering::Relaxed) {
+        let mut exit = false;
+        for _ in 0..5 {
+            if shutdown_clone.load(Ordering::Relaxed) {
+                exit = true;
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
+        if exit {
             break;
         }
-
-        thread::sleep(Duration::from_secs(5));
     }
 
     input_clone.close();
