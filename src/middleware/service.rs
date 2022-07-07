@@ -86,7 +86,6 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                 return Ok(());
             }
             info!("Consuming queue");
-            let mut bomb_planted = false;
             for compound_delivery in buf_consumer {
                 let mut bulk_builder = BulkBuilder::default();
                 if matches!(checkpoint, Checkpoint::Clean) {
@@ -113,17 +112,16 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                             }
                         }
                     }
-                    if bomb_planted {
-                        //panic!("Bombed!");
-                    }
                     if let Some(state) = self.message_processor.get_state() {
                         self.transaction_log.save_state(state).unwrap(); //writeTransactionLog(State, "processed")
                     }
                 }
-                if bulk_builder.size() > 0 {
+                if bulk_builder.size() > 0 && !matches!(checkpoint, Checkpoint::Confirmed) {
                     let output = bulk_builder.build();
-                    self.message_processor
-                        .send_process_output(&mut exchange, output)?;
+                    if !matches!(checkpoint, Checkpoint::Sent) {
+                        self.message_processor
+                            .send_process_output(&mut exchange, output)?;
+                    }
                     self.transaction_log.save_sent().unwrap();
                     exchange.send(&Message::Confirmed)?;
                     self.transaction_log.save_confirmed().unwrap();
@@ -146,7 +144,6 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                 }
                 self.transaction_log.save_clean().unwrap();
                 checkpoint = Checkpoint::Clean;
-                bomb_planted = true;
             }
         }
         info!("Exit");
