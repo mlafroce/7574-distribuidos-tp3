@@ -107,7 +107,7 @@ fn tcp_receive_message(socket: &mut Socket) -> Option<(u8, (u8, usize))> {
             if let Ok(ping_or_pong_buffer) = socket.read(1) {
                 let ping_or_pong = ping_or_pong_buffer[0];
 
-                return Some((0, (ping_or_pong, 0)));
+                return Some((LAYER_PING_PONG, (ping_or_pong, 0)));
             }
         }
 
@@ -116,7 +116,7 @@ fn tcp_receive_message(socket: &mut Socket) -> Option<(u8, (u8, usize))> {
                 let opcode = opcode_buffer[0];
                 if let Ok(buffer) = socket.read(size_of::<usize>()) {
                     let peer_id = usize::from_le_bytes(buffer.try_into().unwrap());
-                    return Some((1, (opcode, peer_id)));
+                    return Some((LAYER_LEADER_ELECTION, (opcode, peer_id)));
                 }
             }
         }
