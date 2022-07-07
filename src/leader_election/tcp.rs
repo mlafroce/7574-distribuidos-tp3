@@ -18,7 +18,6 @@ pub fn is_leader_alive(
     println!("send ping: start");
     if let Ok(mut sockets) = sockets_lock.write() {
         if let Some(socket) = sockets.get_mut(&leader_id) {
-            println!("send ping: writing");
             send_msg_ping(socket);
         }
     }
@@ -91,10 +90,8 @@ fn send_msg(socket: &mut Socket, opcode: u8, id: usize) {
 }
 
 fn tcp_receive_message(socket: &mut Socket) -> Option<(u8, (u8, usize))> {
-    println!("receive");
     if let Ok(layercode_buffer) = socket.read(1) {
         let layercode = layercode_buffer[0];
-        println!("layercode: {}", layercode);
 
         if layercode == 0 {
             if let Ok(ping_or_pong_buffer) = socket.read(1) {
@@ -122,7 +119,6 @@ fn tcp_receive_messages(
     println!("receiving msgs | from: {}", from_id);
 
     loop {
-        println!("receiving msgs | begin");
         match tcp_receive_message(socket) {
             Some(msg) => {
                 println!("receiving msgs | received: {:?}", msg);
