@@ -13,8 +13,6 @@ use std::thread;
 use tp2::health_checker::health_base::HealthBase;
 use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
 
-const N_RESULTS: usize = 1;
-
 fn main() -> Result<()> {
     let env_config = init();
     let output_path =
@@ -53,15 +51,14 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
     let queue = channel.queue_declare(RESULTS_QUEUE_NAME, options)?;
 
     // Query results
-    let mut count = 0;
     let mut results = Results::default();
     let mut data_received = (false, false, false);
     let consumer = queue.consume(ConsumerOptions::default())?;
     let consumer = DeliveryConsumer::new(consumer);
     let buf_consumer = BufConsumer::new(consumer);
     info!("Starting iteration");
-    for (bulk, delivery) in buf_consumer {
-        for message in bulk {
+    for compound_delivery in buf_consumer {
+        for message in compound_delivery.data {
             match message {
                 Message::PostScoreMean(mean) => {
                     info!("got mean: {:?}", mean);
@@ -76,19 +73,19 @@ fn run_service(config: Config, output_path: String) -> Result<()> {
                 Message::CollegePostUrl(url) => {
                     results.college_posts.push(url);
                 }
-                Message::EndOfStream => {
+                Message::EndOfStream => {}
+                Message::CollegePostEnded => {
                     info!("College posts ended");
-                    count += 1;
-                    if count == N_RESULTS {
-                        data_received.2 = true;
-                    }
+                    data_received.2 = true;
                 }
+                Message::Confirmed  => {}
                 _ => {
                     error!("Invalid message arrived {:?}", message);
                 }
             }
         }
-        delivery.ack(&channel)?;
+        compound_delivery.msg_delivery.ack(&channel)?;
+        compound_delivery.confirm_delivery.ack(&channel)?;
         if data_received.0 && data_received.1 && data_received.2 {
             break;
         }

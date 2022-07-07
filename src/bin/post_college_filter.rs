@@ -29,6 +29,8 @@ fn run_service(config: Config) -> Result<()> {
     let ids = get_college_posts_ids(&config)?;
     info!("Filtering college posts");
     let mut processor = PostCollegeFilter { ids };
+    // FIX: Seems that closing and opening a connection so fast crashes the app, putting a sleep
+    std::thread::sleep(std::time::Duration::from_secs(1));
     let mut service = RabbitService::new(config, &mut processor);
     service.run(
         POST_URL_AVERAGE_QUEUE_NAME,
@@ -41,7 +43,7 @@ struct PostCollegeFilter {
 }
 
 impl MessageProcessor for PostCollegeFilter {
-    type State = HashSet<String>;
+    type State = ();
     fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostUrl(id, url) => {
@@ -54,6 +56,10 @@ impl MessageProcessor for PostCollegeFilter {
             }
         }
         None
+    }
+
+    fn on_stream_finished(&self) -> Option<Message> {
+        Some(Message::CollegePostEnded)
     }
 }
 
@@ -75,12 +81,20 @@ impl MessageProcessor for CollegePostIdConsumer {
         }
         None
     }
+
+    fn get_state(&self) -> Option<Self::State> {
+        Some(self.ids.clone())
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.ids = state;
+    }
 }
 
 fn get_college_posts_ids(config: &Config) -> Result<HashSet<String>> {
     let config = config.clone();
     let mut processor = CollegePostIdConsumer::default();
-    let mut service = RabbitService::new(config, &mut processor);
+    let mut service = RabbitService::new_subservice(config, &mut processor);
     service.run(POST_ID_COLLEGE_QUEUE_NAME, None)?;
     Ok(processor.ids)
 }

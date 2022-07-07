@@ -1,5 +1,4 @@
 use amiquip::Result;
-use envconfig::Envconfig;
 use log::{info, warn};
 use tp2::messages::Message;
 use tp2::middleware::message_processor::MessageProcessor;
@@ -29,11 +28,13 @@ fn main() -> Result<()> {
 fn run_service(config: Config) -> Result<()> {
     info!("Getting score average");
     let mut processor = PostAverageConsumer::default();
-    let mut consumer = RabbitService::new(config.clone(), &mut processor);
+    let mut consumer = RabbitService::new_subservice(config.clone(), &mut processor);
     consumer.run_once(POST_SCORE_AVERAGE_QUEUE_NAME, None)?;
     if let Some(score_average) = processor.score_average {
         info!("Filtering above average");
         let mut processor = PostAverageFilter { score_average };
+        // FIX: Seems that closing and opening a connection so fast crashes the app, putting a sleep
+        std::thread::sleep(std::time::Duration::from_secs(1));
         let mut service = RabbitService::new(config, &mut processor);
         service.run(
             POST_COLLEGE_QUEUE_NAME,
@@ -50,7 +51,7 @@ struct PostAverageFilter {
 }
 
 impl MessageProcessor for PostAverageFilter {
-    type State = f32;
+    type State = ();
     fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::FullPost(post) => {
@@ -83,5 +84,13 @@ impl MessageProcessor for PostAverageConsumer {
             }
         }
         None
+    }
+
+    fn get_state(&self) -> Option<Self::State> {
+        self.score_average
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.score_average = Some(state);
     }
 }

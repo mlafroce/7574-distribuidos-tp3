@@ -92,7 +92,7 @@ impl<'a> BinaryExchange<'a> {
 impl RabbitExchange for BinaryExchange<'_> {
     fn send<T>(&mut self, message: &T) -> Result<()>
     where
-        T: serde::Serialize,
+        T: serde::Serialize + std::fmt::Debug,
     {
         self.send_with_key(message, &self.output_key.clone())
     }
@@ -119,9 +119,11 @@ impl RabbitExchange for BinaryExchange<'_> {
             }
             Ordering::Equal => {
                 self.finished_producers += 1;
-                info!("Sending {} EOS", self.consumers);
+                //info!("Sending {} EOS", self.consumers);
+                info!("Producer finished");
                 for _ in 0..self.consumers {
                     self.send(&self.eos_message.clone())?;
+                    self.send(&Message::Confirmed)?;
                 }
                 Ok(true)
             }

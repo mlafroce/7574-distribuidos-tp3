@@ -87,7 +87,7 @@ impl MessageProcessor for PostIdWithUrlConsumer {
 fn get_posts_ids_with_url(config: &Config) -> Result<HashSet<String>> {
     let config = config.clone();
     let mut processor = PostIdWithUrlConsumer::default();
-    let mut service = RabbitService::new(config, &mut processor);
+    let mut service = RabbitService::new_subservice(config, &mut processor);
     service.run(POST_ID_WITH_URL_QUEUE_NAME, None)?;
     Ok(processor.ids)
 }
