@@ -31,9 +31,8 @@ fn main() -> Result<()> {
         thread::spawn(move || health_answerer.run(&mut health_answerer_handler));
     run_service(env_config.clone(), shutdown.clone())?;
     shutdown.store(true, Ordering::Relaxed);
-    health_answerer_thread
-        .join()
-        .expect("Failed to join health_answerer_thread");
+    health_answerer_thread.join().expect("Failed to join health_answerer_thread");
+    sigterm_handler_join.join().expect("Failed to join handle_sigterm");
     Ok(())
 }
 
