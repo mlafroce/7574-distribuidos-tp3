@@ -54,6 +54,8 @@ impl Server {
             handle_sigterm(shutdown_for_signals_thread.clone());
         });
 
+        self.clean_queues(config);
+        println!("Finished cleaning queues");
         let listener = TcpListener::bind(self.server_address.clone()).expect(&*format!("Could not bind to address: {}", self.server_address));
         listener.set_nonblocking(true).expect("Could not set non blocking to true");
         for client in listener.incoming() {
@@ -79,7 +81,39 @@ impl Server {
         signals_thread.join().expect("Failed to join signals thread");
     }
 
+    fn clean_queues(&self, config: &Config) {
+        // recover log ?
+        self.send_eof(self.posts_producer_address.clone());
+        // log send ?
+        self.send_eof(self.comments_producer_address.clone());
+        // log confirm ?
+        self.wait_for_empty_response(config);
+        // log ack ? Hace falta el wait? Tal vez puedo simplemente empezar a sacar respuestas en el primer
+        // cliente hasta que saque 1 empty? No estoy seguro
+    }
+
+    fn send_eof(&self, address: String) {
+        let mut sent = false;
+        while !sent {
+            match TcpStream::connect(address.clone()) {
+                Ok(_) => {sent = true}
+                Err(_) => {}
+            }
+        }
+    }
+
+    fn wait_for_empty_response(&self, config: &Config) {
+        let mut found_empty_response = false;
+        while !found_empty_response {
+            let result = self.wait_for_results(config).expect("Failed to wait for empty response");
+            found_empty_response = result.best_meme == "" && result.score_mean.is_nan() && result.college_posts.len() == 0;
+        }
+    }
+
     fn handle_client(&self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
+        // HAY QUE MANEJAR BIEN LOS ERRORES DE ACA!!! NO ALCANZA CON UN "?" PORQUE EN TAL CASO VA A
+        // PASAR QUE POSIBLEMENTE MANDE POSTS Y NO CMMENTS Y POR ENDE QUEDE TRABADO. O BIEN QUE EL
+        // RESULTADO DEL SIGUIENTE CLIENTE ESTE MAL!!!!!!!!!!!
         println!("Forwarding posts");
         let mut post_producer_stream = TcpStream::connect(self.posts_producer_address.clone())?;
         self.forward_file(stream, &mut post_producer_stream)?;
