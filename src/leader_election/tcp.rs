@@ -269,14 +269,21 @@ pub fn process_output(
     sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>,
 ) {
     loop {
-        if let Ok(msg_option) = output.pop() {
-            if let Some(msg) = msg_option {
-                if let Ok(mut sockets) = sockets_lock.write() {
-                    if let Some(socket) = sockets.get_mut(&msg.0) {
-                        send_msg(socket, msg.1 .1, msg.1 .0);
+        match output.pop() {
+            Ok(msg_option) => {
+                if let Some(msg) = msg_option {
+                    if let Ok(mut sockets) = sockets_lock.write() {
+                        if let Some(socket) = sockets.get_mut(&msg.0) {
+                            send_msg(socket, msg.1 .1, msg.1 .0);
+                        }
                     }
                 }
             }
+            Err(_) => {
+                break;
+            }
         }
     }
+
+    println!("process_output exit gracefully")
 }

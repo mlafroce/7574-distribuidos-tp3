@@ -29,7 +29,7 @@ fn main() {
     // Begin Leader
     let shutdown = Arc::new(AtomicBool::new(false));
     let mut shutdown_clone = shutdown.clone();
-    let signals_thread = spawn(move || handle_sigterm(shutdown_clone));
+    let signals_handler = thread::spawn(move || handle_sigterm(shutdown_clone));
     let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
     let mut got_pong_clone = got_pong.clone();
     let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
@@ -40,8 +40,9 @@ fn main() {
     let sockets_lock_clone_2 = sockets_lock.clone();
     let mut sockets_lock_clone_3 = sockets_lock.clone();
     let mut input_clone = input.clone();
-    let ouput_clone = output.clone();
-    let mut election = LeaderElection::new(process_id, output, N_MEMBERS);
+    let mut output_clone = output.clone();
+    let mut election = LeaderElection::new(process_id, output_clone, N_MEMBERS);
+    output_clone = output.clone();
     let election_clone = election.clone();
     shutdown_clone = shutdown.clone();
     let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone, shutdown_clone));
@@ -49,7 +50,8 @@ fn main() {
     got_pong_clone = got_pong.clone();
     tcp_connect(process_id, input_clone, sockets_lock_clone_2, N_MEMBERS, got_pong_clone);
     input_clone = input.clone();
-    let output_processor = thread::spawn(move || process_output(ouput_clone, sockets_lock_clone_3));
+    let output_processor = thread::spawn(move || process_output(output_clone, sockets_lock_clone_3));
+    output_clone = output.clone();
     let input_processor = thread::spawn(move || process_input(election_clone, input));
     // End Leader
 
@@ -84,6 +86,7 @@ fn main() {
     }
 
     input_clone.close();
+    output_clone.close();
 
     if let Ok(_) = tcp_listener.join() {
         println!("tcp_listener joined");
@@ -93,10 +96,15 @@ fn main() {
         println!("input_processor joined")
     }
     
-    output_processor.join().unwrap();
-    signals_thread.join().unwrap();
+    if let Ok(_) = output_processor.join() {
+        println!("output_processor joined")
+    }
+
+    if let Ok(_) = signals_handler.join() {
+        println!("signals_handler joined")
+    }
     
-    println!("Exited gracefully");
+    println!("main exit gracefully");
 }
 
 
