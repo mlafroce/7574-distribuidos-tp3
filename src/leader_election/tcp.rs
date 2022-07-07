@@ -129,9 +129,16 @@ fn tcp_receive_messages(
     socket: &mut Socket,
     input: Vector<(usize, u8)>,
     got_pong: Arc<(Mutex<bool>, Condvar)>,
+    shutdown: Arc<AtomicBool>
 ) {
     loop {
-        match tcp_receive_message(socket) {
+        let msg_option = tcp_receive_message(socket);
+
+        if shutdown.load(Ordering::Relaxed) {
+            break;
+        }
+
+        match msg_option {
             Some(msg) => {
                 match msg.0 {
                     LAYER_PING_PONG => {
@@ -147,10 +154,13 @@ fn tcp_receive_messages(
                         let msg_ = msg.1;
                         input.push((msg_.1, msg_.0))
                     }
-                    _ => {}
+                    _ => {
+                    }
                 }
             }
-            None => break,
+            None => {
+                break
+            }
         }
     }
 }
@@ -178,7 +188,7 @@ pub fn tcp_listen(
     }
 
     let mut vector_clone = vector.clone();
-    let shutdown_clone = shutdown.clone();
+    let mut shutdown_clone = shutdown.clone();
     for stream_result in listener.incoming() {
         match stream_result {
             Ok(stream) => {
@@ -190,8 +200,10 @@ pub fn tcp_listen(
                     }
                     let got_pong_clone = got_pong.clone();
                     tcp_receivers.push(thread::spawn(move || {
-                        tcp_receive_messages(from_id, &mut socket, vector_clone, got_pong_clone)
+                        tcp_receive_messages(from_id, &mut socket, vector_clone, got_pong_clone, shutdown_clone)
                     }));
+
+                    shutdown_clone = shutdown.clone();
                     vector_clone = vector.clone();
                 }
             }
@@ -221,8 +233,12 @@ pub fn tcp_connect(
     sockets_lock: Arc<RwLock<HashMap<usize, Socket>>>,
     n_members: usize,
     got_pong: Arc<(Mutex<bool>, Condvar)>,
+    shutdown: Arc<AtomicBool>
 ) {
+    let mut v = Vec::new();
+
     let mut input_clone = input.clone();
+    let mut shutdown_clone = shutdown.clone();
 
     let members: Vec<usize> = (0..n_members).collect();
 
@@ -240,13 +256,19 @@ pub fn tcp_connect(
                 }
                 send_id(process_id, &mut socket);
                 let got_pong_clone = got_pong.clone();
-                thread::spawn(move || {
-                    tcp_receive_messages(peer_id_clone, &mut socket, input_clone, got_pong_clone)
-                });
+                v.push(thread::spawn(move || {
+                    tcp_receive_messages(peer_id_clone, &mut socket, input_clone, got_pong_clone, shutdown_clone)
+                }));
+
+                shutdown_clone = shutdown.clone();
                 input_clone = input.clone();
                 break;
             }
         }
+    }
+
+    for t in v {
+        t.join().unwrap();
     }
 }
 

@@ -4,7 +4,7 @@ use std::{
 };
 use super::vector::Vector;
 
-pub const TIMEOUT: Duration = Duration::from_secs(20);
+pub const TIMEOUT: Duration = Duration::from_secs(15);
 const FIRST_LIDER: usize = 0;
 
 #[derive(Clone)]

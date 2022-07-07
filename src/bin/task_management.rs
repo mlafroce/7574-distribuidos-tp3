@@ -56,10 +56,11 @@ fn main() {
     shutdown_clone = shutdown.clone();
 
     // connect with members - receive msgs from them and deposit into input queue
-    tcp_connect(process_id, input_clone, sockets_lock_clone, N_MEMBERS, got_pong_clone);
+    let tcp_connect = thread::spawn(move || tcp_connect(process_id, input_clone, sockets_lock_clone, N_MEMBERS, got_pong_clone, shutdown_clone));
     sockets_lock_clone = sockets_lock.clone();
     input_clone = input.clone();
     got_pong_clone = got_pong.clone();
+    shutdown_clone = shutdown.clone();
 
     // do socket send msgs from output queue
     let output_processor = thread::spawn(move || process_output(output_clone, sockets_lock_clone));
@@ -105,15 +106,30 @@ fn main() {
         if exit {
             break;
         }
+        
     }
 
     input_clone.close();
     output_clone.close();
-    
+
+    if let Ok(sockets) = sockets_lock.write() {
+        for (_, socket) in &*sockets {
+            socket.shutdown()
+        }
+    }
+
     if task_manager_handler.is_some() {
         if let Ok(_) = task_manager_handler.unwrap().join() {
             println!("task_manager_handler joined")
         }
+    }
+
+    if let Ok(_) = signals_handler.join() {
+        println!("signals_handler joined")
+    }
+
+    if let Ok(_) = tcp_connect.join() {
+        println!("tcp_connect joined");
     }
 
     if let Ok(_) = tcp_listener.join() {
@@ -126,10 +142,6 @@ fn main() {
     
     if let Ok(_) = output_processor.join() {
         println!("output_processor joined")
-    }
-
-    if let Ok(_) = signals_handler.join() {
-        println!("signals_handler joined")
     }
     
     println!("main exit gracefully");

@@ -9,10 +9,10 @@ docker-compose-up: docker-image
 .PHONY: docker-compose-up
 
 docker-compose-down:
-	docker-compose -f docker-compose.yaml stop -t 10 task_management_0 &
-	docker-compose -f docker-compose.yaml stop -t 10 task_management_1 &
-	docker-compose -f docker-compose.yaml stop -t 10 task_management_2 &
-	docker-compose -f docker-compose.yaml stop -t 10 task_management_3
+	docker-compose -f docker-compose.yaml stop -t 20 task_management_0 &
+	docker-compose -f docker-compose.yaml stop -t 20 task_management_1 &
+	docker-compose -f docker-compose.yaml stop -t 20 task_management_2 &
+	docker-compose -f docker-compose.yaml stop -t 20 task_management_3
 	docker-compose -f docker-compose.yaml stop -t 5 client
 	docker-compose -f docker-compose.yaml stop -t 5 server
 	docker-compose -f docker-compose.yaml stop -t 5 post_producer
