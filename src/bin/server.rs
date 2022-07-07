@@ -54,8 +54,8 @@ impl Server {
             handle_sigterm(shutdown_for_signals_thread.clone());
         });
 
-        self.clean_queues(config);
-        println!("Finished cleaning queues");
+        // self.clean_queues(config);
+        // println!("Finished cleaning queues");
         let listener = TcpListener::bind(self.server_address.clone()).expect(&*format!("Could not bind to address: {}", self.server_address));
         listener.set_nonblocking(true).expect("Could not set non blocking to true");
         for client in listener.incoming() {
