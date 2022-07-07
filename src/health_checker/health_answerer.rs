@@ -34,7 +34,10 @@ impl HealthBase for HealthAnswerer {
                 Ok(mut stream) => {
                     println!("Received new client");
                     self.answer_health_messages(&stream, HealthMsg::Ping, HealthMsg::Pong, handler);
-                    stream.write_all(&[HealthMsg::Exit as u8]).unwrap();
+                    match stream.write_all(&[HealthMsg::Exit as u8]) {
+                        Ok(_) => {}
+                        Err(e) => {println!("Failed to send exit msg: {:?}", e)}
+                    }
                     let _ = stream.shutdown(Shutdown::Both);
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
