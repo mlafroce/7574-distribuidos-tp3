@@ -57,6 +57,7 @@ fn main() {
 
     thread::sleep(Duration::from_secs(10));
 
+    let mut task_manager_handler = None;
     let mut running_service = false;
     shutdown_clone = shutdown.clone();
     loop {
@@ -64,7 +65,7 @@ fn main() {
             println!("leader");
             if !running_service {
                 running_service = true;
-                thread::spawn(move || task_management_clone.run());
+                task_manager_handler = Some(thread::spawn(move || task_management_clone.run()));
                 task_management_clone = task_management.clone()
             }
         } else {
@@ -92,6 +93,12 @@ fn main() {
 
     input_clone.close();
     output_clone.close();
+    
+    if task_manager_handler.is_some() {
+        if let Ok(_) = task_manager_handler.unwrap().join() {
+            println!("task_manager_handler joined")
+        }
+    }
 
     if let Ok(_) = tcp_listener.join() {
         println!("tcp_listener joined");
