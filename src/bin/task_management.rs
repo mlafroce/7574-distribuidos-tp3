@@ -26,41 +26,54 @@ fn main() {
     let task_management = TaskManagement::new(services, config.service_port, config.timeout_sec, config.sec_between_requests);
     let mut task_management_clone = task_management.clone();
 
-    // Begin Leader
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let mut shutdown_clone = shutdown.clone();
-    let signals_handler = thread::spawn(move || handle_sigterm(shutdown_clone));
-    let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
-    let mut got_pong_clone = got_pong.clone();
+    // begin leader election
     let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
     let input: Vector<(usize, u8)> = Vector::new();
     let output: Vector<(usize, (usize, u8))> = Vector::new();
     let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
-    let sockets_lock_clone = sockets_lock.clone();
-    let sockets_lock_clone_2 = sockets_lock.clone();
-    let mut sockets_lock_clone_3 = sockets_lock.clone();
+    let mut election = LeaderElection::new(process_id, output.clone(), N_MEMBERS);
+
+
+    let mut shutdown_clone = shutdown.clone();
+    let mut got_pong_clone = got_pong.clone();
+    let mut sockets_lock_clone = sockets_lock.clone();
     let mut input_clone = input.clone();
     let mut output_clone = output.clone();
-    let mut election = LeaderElection::new(process_id, output_clone, N_MEMBERS);
-    output_clone = output.clone();
     let election_clone = election.clone();
+
+
+    // handle sigterm
+    let signals_handler = thread::spawn(move || handle_sigterm(shutdown_clone));
     shutdown_clone = shutdown.clone();
+
+    // listen members - receive msgs from them and deposit into input queue
     let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone, shutdown_clone));
     input_clone = input.clone();
     got_pong_clone = got_pong.clone();
-    tcp_connect(process_id, input_clone, sockets_lock_clone_2, N_MEMBERS, got_pong_clone);
+    sockets_lock_clone = sockets_lock.clone();
+    shutdown_clone = shutdown.clone();
+
+    // connect with members - receive msgs from them and deposit into input queue
+    tcp_connect(process_id, input_clone, sockets_lock_clone, N_MEMBERS, got_pong_clone);
+    sockets_lock_clone = sockets_lock.clone();
     input_clone = input.clone();
-    let output_processor = thread::spawn(move || process_output(output_clone, sockets_lock_clone_3));
+    got_pong_clone = got_pong.clone();
+
+    // do socket send msgs from output queue
+    let output_processor = thread::spawn(move || process_output(output_clone, sockets_lock_clone));
     output_clone = output.clone();
+    sockets_lock_clone = sockets_lock.clone();
+
+    // consume input queue msgs, and pass the messages to leader_election
     let input_processor = thread::spawn(move || process_input(election_clone, input));
-    // End Leader
 
     // to-do: remove this
     thread::sleep(Duration::from_secs(10));
 
     let mut task_manager_handler = None;
     let mut running_service = false;
-    shutdown_clone = shutdown.clone();
     loop {
         if election.am_i_leader() {
             println!("leader");
@@ -72,11 +85,13 @@ fn main() {
         } else {
             println!("not leader");
             if let Some(leader_id) = election.get_leader_id() {
-                sockets_lock_clone_3 = sockets_lock.clone();
-                got_pong_clone = got_pong.clone();
-                if !is_leader_alive(leader_id, sockets_lock_clone_3, got_pong_clone) {
+                
+                if !is_leader_alive(leader_id, sockets_lock_clone, got_pong_clone) {
                     election.find_new();
                 }
+
+                sockets_lock_clone = sockets_lock.clone();
+                got_pong_clone = got_pong.clone();
             }
         }
 
