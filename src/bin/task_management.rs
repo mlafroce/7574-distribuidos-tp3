@@ -7,10 +7,10 @@ use envconfig::Envconfig;
 use tp2::leader_election::leader_election::{LeaderElection};
 use tp2::leader_election::tcp::{process_output, process_input, tcp_connect, tcp_listen, is_leader_alive};
 use tp2::leader_election::vector::Vector;
+use tp2::sigterm_handler::sigterm_handler::handle_sigterm;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock, Mutex, Condvar};
 use std::thread::spawn;
-use signal_hook::{consts::SIGTERM, iterator::Signals};
 use tp2::health_checker::health_answerer::HealthAnswerer;
 use tp2::health_checker::health_base::HealthBase;
 use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
@@ -26,18 +26,18 @@ fn main() {
     let services = reader.lines()
         .map(|l| l.expect("Could not parse line"))
         .collect();
-    let task_management = TaskManagement::new(services, config.service_port, config.timeout_sec, config.sec_between_requests);
+    let shutdown_task_management = Arc::new(AtomicBool::new(false));
+    let task_management = TaskManagement::new(services, config.service_port, config.timeout_sec, config.sec_between_requests, shutdown_task_management.clone());
     let mut task_management_clone = task_management.clone();
 
     // begin leader election
-    let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
     let shutdown = Arc::new(AtomicBool::new(false));
+    let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
     let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
     let input: Vector<(usize, u8)> = Vector::new();
     let output: Vector<(usize, (usize, u8))> = Vector::new();
     let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
     let mut election = LeaderElection::new(process_id, output.clone(), N_MEMBERS);
-
 
     let mut shutdown_clone = shutdown.clone();
     let mut got_pong_clone = got_pong.clone();
@@ -81,25 +81,33 @@ fn main() {
     thread::sleep(Duration::from_secs(10));
 
     let mut task_manager_handler = None;
+    
     let mut running_service = false;
     loop {
         if election.am_i_leader() {
             println!("leader");
             if !running_service {
                 running_service = true;
+                shutdown_task_management.store(false, Ordering::Relaxed);
                 task_manager_handler = Some(thread::spawn(move || task_management_clone.run()));
                 task_management_clone = task_management.clone()
             }
         } else {
-            println!("not leader");
+            println!("not leader");           
+
+            running_service = false;
+            shutdown_task_management.store(true, Ordering::Relaxed);
+
             if let Some(leader_id) = election.get_leader_id() {
-                
+
                 if !is_leader_alive(leader_id, sockets_lock_clone, got_pong_clone) {
                     election.find_new();
                 }
 
                 sockets_lock_clone = sockets_lock.clone();
                 got_pong_clone = got_pong.clone();
+            } else {
+                election.find_new();
             }
         }
 
@@ -171,13 +179,13 @@ struct TaskManagement {
 
 impl TaskManagement {
 
-    pub fn new(services: Vec<String>, service_port: String, timeout_sec: u64, sec_between_requests: u64) -> TaskManagement {
+    pub fn new(services: Vec<String>, service_port: String, timeout_sec: u64, sec_between_requests: u64, shutdown: Arc<AtomicBool>) -> TaskManagement {
         TaskManagement {
             services,
             service_port,
             timeout_sec,
             sec_between_requests,
-            shutdown: Arc::new(AtomicBool::new(false))
+            shutdown: shutdown
         }
     }
 
@@ -193,11 +201,7 @@ impl TaskManagement {
 
     pub fn run(&self) {
         let mut task_manager_threads = Vec::new();
-        let shutdown = self.shutdown.clone();
-        let signals_thread = spawn(move || {
-            handle_sigterm(shutdown);
-        });
-
+        
         for service in self.services.clone() {
             let service_port = self.service_port.clone();
             let timeout_sec = self.timeout_sec;
@@ -216,19 +220,6 @@ impl TaskManagement {
             task_manager_thread.join().expect("Failed to join task manager thread");
         }
         println!("Every task manager joined...");
-        signals_thread.join().expect("Failed to join signals_thread");
     }
 }
 
-fn handle_sigterm(shutdown: Arc<AtomicBool>) {
-    println!("HANDLE SIGTERM");
-    let mut signals = Signals::new(&[SIGTERM]).expect("Failed to register SignalsInfo");
-    for sig in signals.forever() {
-        println!("RECEIVED SIGNAL {}", sig);
-        if sig == SIGTERM {
-            println!("ENTERED IF {}", sig);
-            shutdown.store(true, Ordering::Relaxed);
-            break;
-        }
-    }
-}

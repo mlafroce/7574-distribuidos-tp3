@@ -1,9 +1,9 @@
+use crate::health_checker::health_base::HealthBase;
+use crate::health_checker::health_checker::HealthChecker;
+use crate::health_checker::health_checker_handler::HealthCheckerHandler;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use crate::health_checker::health_checker::HealthChecker;
-use crate::health_checker::health_checker_handler::HealthCheckerHandler;
-use crate::health_checker::health_base::HealthBase;
 
 const MAXIMUM_CONNECTION_RETRIES: u32 = 3;
 
@@ -14,12 +14,17 @@ pub struct TaskManager {
     timeout_sec: u64,
     sec_between_requests: u64,
     shutdown: Arc<AtomicBool>,
-    received_end_from_client: bool
+    received_end_from_client: bool,
 }
 
 impl TaskManager {
-
-    pub fn new(service: String, service_port: String, timeout_sec: u64, sec_between_requests: u64, shutdown: Arc<AtomicBool>) -> TaskManager {
+    pub fn new(
+        service: String,
+        service_port: String,
+        timeout_sec: u64,
+        sec_between_requests: u64,
+        shutdown: Arc<AtomicBool>,
+    ) -> TaskManager {
         TaskManager {
             service,
             connection_retries: 0,
@@ -27,34 +32,57 @@ impl TaskManager {
             timeout_sec,
             sec_between_requests,
             shutdown,
-            received_end_from_client: false
+            received_end_from_client: false,
         }
     }
 
     pub fn run(&mut self) {
         println!("Started task_manager for service {}", self.service);
-        let health_checker = HealthChecker::new(&format!("{}:{}", self.service, self.service_port), self.sec_between_requests, self.timeout_sec);
+        let health_checker = HealthChecker::new(
+            &format!("{}:{}", self.service, self.service_port),
+            self.sec_between_requests,
+            self.timeout_sec,
+        );
         health_checker.run(self);
         println!("Finished run_health_checker. Task manager {}", self.service);
     }
 
     pub fn start_service(&mut self) {
         println!("Task manager start_service for service: {}", self.service);
-        Command::new("docker").arg("start").arg(self.service.clone()).spawn().expect(&format!("Failed to start service {}", self.service.clone()));
+        Command::new("docker")
+            .arg("start")
+            .arg(self.service.clone())
+            .spawn()
+            .expect(&format!("Failed to start service {}", self.service.clone()));
     }
 
     pub fn shutdown_service(&mut self) {
-        println!("Task manager shutdown_service for service: {}", self.service);
-        Command::new("docker").arg("stop").arg(self.service.clone()).spawn()
-            .expect(&format!("Failed to initiate shutdown on service {}", self.service.clone()))
+        println!(
+            "Task manager shutdown_service for service: {}",
+            self.service
+        );
+        Command::new("docker")
+            .arg("stop")
+            .arg(self.service.clone())
+            .spawn()
+            .expect(&format!(
+                "Failed to initiate shutdown on service {}",
+                self.service.clone()
+            ))
             .wait()
-            .expect(&format!("Failed to shutdown service {}", self.service.clone()));
+            .expect(&format!(
+                "Failed to shutdown service {}",
+                self.service.clone()
+            ));
     }
 }
 
 impl HealthCheckerHandler for TaskManager {
     fn handle_connection_closed(&mut self) {
-        println!("Task manager handle_connection_closed for service: {}", self.service);
+        println!(
+            "Task manager handle_connection_closed for service: {}",
+            self.service
+        );
         if !self.received_end_from_client {
             self.connection_retries = 0;
             self.shutdown_service();
@@ -70,7 +98,10 @@ impl HealthCheckerHandler for TaskManager {
     }
 
     fn handle_connection_refused(&mut self) {
-        println!("Task manager handle connection refused for service: {}", self.service);
+        println!(
+            "Task manager handle connection refused for service: {}",
+            self.service
+        );
         if self.connection_retries >= MAXIMUM_CONNECTION_RETRIES {
             self.connection_retries = 0;
             self.shutdown_service();
@@ -80,7 +111,10 @@ impl HealthCheckerHandler for TaskManager {
     }
 
     fn handle_exit_msg(&mut self) {
-        println!("Task manager received handle_exit_msg for service {}", self.service);
+        println!(
+            "Task manager received handle_exit_msg for service {}",
+            self.service
+        );
         self.received_end_from_client = true;
     }
 

@@ -2,7 +2,7 @@ use crate::health_checker::health_checker_handler::HealthCheckerHandler;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-pub struct HealthAnswerHandler{
+pub struct HealthAnswerHandler {
     shutdown: Arc<AtomicBool>
 }
 

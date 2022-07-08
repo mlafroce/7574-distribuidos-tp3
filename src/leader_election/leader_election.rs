@@ -5,7 +5,6 @@ use std::{
 use super::vector::Vector;
 
 pub const TIMEOUT: Duration = Duration::from_secs(20);
-const FIRST_LIDER: usize = 0;
 
 #[derive(Clone)]
 pub struct LeaderElection {
@@ -21,7 +20,7 @@ impl LeaderElection {
         LeaderElection {
             id: id,
             output: output,
-            leader_id: Arc::new(RwLock::new(Some(FIRST_LIDER))),
+            leader_id: Arc::new(RwLock::new(None)),
             got_ok: Arc::new((Mutex::new(false), Condvar::new())),
             n_members: n_members
         }

@@ -45,6 +45,8 @@ impl Socket {
     }
 
     pub fn write(&mut self, buffer: &Vec<u8>) {
-        self.stream.write_all(buffer).unwrap()
+        if let Err(err) = self.stream.write_all(buffer) {
+            println!("{}", err)
+        }
     }
 }

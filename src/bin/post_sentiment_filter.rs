@@ -61,12 +61,12 @@ impl MessageProcessor for PostSentimentFilter {
     type State = HashSet<String>;
 
     fn set_state(&mut self, state: Self::State) {
-        info!("PostSentimentFilter | retrieving state: {:?}", state.len());
+        //info!("PostSentimentFilter | retrieving state: {:?}", state.len());
         self.ids = state;
     }
 
     fn get_state(&self) -> Option<Self::State> {
-        info!("PostSentimentFilter | saving state: {:?}", self.ids.len());
+        //info!("PostSentimentFilter | saving state: {:?}", self.ids.len());
         Some(self.ids.clone())
     }
 
@@ -94,12 +94,12 @@ impl MessageProcessor for PostIdWithUrlConsumer {
     type State = HashSet<String>;
 
     fn set_state(&mut self, state: Self::State) {
-        info!("PostIdWithUrlConsumer | retrieving state: {:?}", state.len());
+        //info!("PostIdWithUrlConsumer | retrieving state: {:?}", state.len());
         self.ids = state;
     }
 
     fn get_state(&self) -> Option<Self::State> {
-        info!("PostIdWithUrlConsumer | saving state: {:?}", self.ids.len());
+        //info!("PostIdWithUrlConsumer | saving state: {:?}", self.ids.len());
         Some(self.ids.clone())
     }
 

@@ -226,7 +226,7 @@ pub fn tcp_connect(
 
     let members: Vec<usize> = (0..n_members).collect();
 
-    for peer_id in members[(process_id + 1)..].iter() {
+    for peer_id in members.iter() {
         let peer_id_clone = peer_id.clone();
 
         loop {
