@@ -27,8 +27,8 @@ fn main() {
     server.run(&env_config);
 }
 
-const MAX_TRIES_FOR_COMMENT_PRODUCER_CONNECTOR: u64 = 10;
-const SEC_BETWEEN_RETRIES_FOR_COMMENT: u64 = 30;
+const MAX_TRIES_FOR_COMMENT_PRODUCER_CONNECTOR: u64 = 5;
+const SEC_BETWEEN_RETRIES_FOR_COMMENT: u64 = 20;
 
 pub struct Server {
     chunk_size: u64,
