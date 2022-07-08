@@ -1,9 +1,13 @@
+use std::collections::vec_deque::IntoIter;
+use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{BufReader, BufRead, Seek, Write};
 use serde::de::DeserializeOwned;
 use serde_json;
+
+const MAX_CHECKPOINTS: usize = 20;
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum Checkpoint<S> where S: std::clone::Clone {
@@ -37,9 +41,8 @@ impl TransactionLog {
         self.log.rewind()?;
         // TODO: load last lines, not the whole log!
         let reader = BufReader::new(&self.log);
-        let last_processed = reader
-            .lines()
-            .flatten()
+        let last_lines = LastLines::new(reader.lines().flatten(), MAX_CHECKPOINTS);
+        let last_processed = last_lines.into_iter()
             .flat_map(|s| {
                 serde_json::from_str::<Checkpoint<S>>(&s)
             })
@@ -57,13 +60,8 @@ impl TransactionLog {
     ) -> io::Result<Checkpoint<S>> {
         self.log.rewind()?;
         let reader = BufReader::new(&self.log);
-        /*let lines = reader.lines().flatten().collect::<Vec<_>>();
-        let last_checkpoint =  lines.into_iter().rev().flat_map(|s| {
-            serde_json::from_str::<Checkpoint<S>>(&s)
-        }).next();*/
-        let last_checkpoint = reader
-            .lines()
-            .flatten()
+        let last_lines = LastLines::new(reader.lines().flatten(), MAX_CHECKPOINTS);
+        let last_checkpoint = last_lines.into_iter()
             .flat_map(|s| {
                 serde_json::from_str::<Checkpoint<S>>(&s)
             }).last();
@@ -75,7 +73,6 @@ impl TransactionLog {
     }
 
     pub fn delete_log(&self) -> io::Result<()> {
-        //drop(self.log);
         std::fs::remove_file(&self.path)
     }
 
@@ -110,4 +107,30 @@ impl TransactionLog {
         self.log.write_all(&[b'\n'])
     }
 
+}
+
+struct LastLines {
+    buf: VecDeque<String>
+}
+
+impl LastLines {
+    pub fn new<T: Iterator<Item=String>>(mut iter: T, max: usize) -> Self {
+        let mut buf = VecDeque::with_capacity(max);
+        while let Some(s) = iter.next() {
+            buf.push_back(s);
+            if buf.len() > max {
+                buf.pop_front();
+            }
+        }
+        Self {buf}
+    }
+}
+
+impl IntoIterator for LastLines {
+    type Item = String;
+    type IntoIter = IntoIter<String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.buf.into_iter()
+    }
 }
