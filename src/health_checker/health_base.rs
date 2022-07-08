@@ -1,7 +1,7 @@
 use crate::health_checker::health_msg::HealthMsg;
 use crate::health_checker::health_checker_handler::HealthCheckerHandler;
 use std::net::TcpStream;
-use std::io::{BufReader, Read, Write};
+use std::io::{Read, Write};
 
 pub trait HealthBase {
 
