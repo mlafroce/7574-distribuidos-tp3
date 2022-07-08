@@ -10,3 +10,7 @@ post_sentiment_calculator
 post_sentiment_filter
 score_extractor
 url_extractor
+task_management_0
+task_management_1
+task_management_2
+task_management_3

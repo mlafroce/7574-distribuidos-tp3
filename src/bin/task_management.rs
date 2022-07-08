@@ -11,6 +11,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock, Mutex, Condvar};
 use std::thread::spawn;
 use signal_hook::{consts::SIGTERM, iterator::Signals};
+use tp2::health_checker::health_answerer::HealthAnswerer;
+use tp2::health_checker::health_base::HealthBase;
+use tp2::health_checker::health_answerer_handler::HealthAnswerHandler;
 use tp2::task_manager::task_manager::TaskManager;
 
 pub const N_MEMBERS: usize = 4;
@@ -47,6 +50,11 @@ fn main() {
     // handle sigterm
     let signals_handler = thread::spawn(move || handle_sigterm(shutdown_clone));
     shutdown_clone = shutdown.clone();
+
+    // health_answerer
+    let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
+    let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
+    let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
 
     // listen members - receive msgs from them and deposit into input queue
     let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone, shutdown_clone));
@@ -126,6 +134,10 @@ fn main() {
     
     if let Ok(_) = output_processor.join() {
         println!("output_processor joined")
+    }
+
+    if let Ok(_) = health_answerer_thread.join() {
+        println!("health_answerer_thread joined")
     }
 
     if let Ok(_) = signals_handler.join() {
