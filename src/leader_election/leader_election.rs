@@ -52,11 +52,11 @@ impl LeaderElection {
 
         match opcode {
             b'O' => {
-                println!("received OK from {}", id_from);
+                // received OK
                 self.set_got_ok(true);
             }
             b'E' => {
-                println!("received ELECTION from {}", id_from);
+                // received ELECTION
                 if id_from < self.id {
                     self.output.push((id_from, (self.id, b'O')));
                     let mut me = self.clone();
@@ -64,7 +64,7 @@ impl LeaderElection {
                 }
             }
             b'C' => {
-                println!("received new COORDINATOR {}", id_from);
+                // received new COORDINATOR
                 self.set_leader_id(Some(id_from));
             }
             _ => {}
@@ -83,14 +83,14 @@ impl LeaderElection {
     }
 
     fn send_election(&mut self) {
-        println!("send ELECTION");
+        // send ELECTION
         for id_peer in (self.id + 1)..self.n_members {
             self.output.push((id_peer, (self.id, b'E')));
         }
     }
 
     pub fn find_new(&mut self) {
-        println!("searching lider");
+        // searching lider
 
         self.set_got_ok(false);
         self.set_leader_id(None);
@@ -104,8 +104,8 @@ impl LeaderElection {
         {
             Ok(got_ok) => {
                 if !*got_ok.0 {
-                    println!("any ok received");
-                    println!("i'am the new lider");
+                    // any ok received
+                    // i'am the new lider
 
                     for peer_id in 0..self.n_members {
                         self.output.push((peer_id, (self.id, b'C')));
