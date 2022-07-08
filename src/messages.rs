@@ -23,6 +23,7 @@ pub struct BestMeme {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Message {
+    StreamStart(u64),
     EndOfStream,
     FullPost(Post),
     FullComment(Comment),

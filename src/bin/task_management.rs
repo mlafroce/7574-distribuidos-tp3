@@ -10,6 +10,7 @@ use tp2::leader_election::vector::Vector;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock, Mutex, Condvar};
 use std::thread::spawn;
+use log::debug;
 use signal_hook::{consts::SIGTERM, iterator::Signals};
 use tp2::health_checker::health_answerer::HealthAnswerer;
 use tp2::health_checker::health_base::HealthBase;
@@ -84,16 +85,15 @@ fn main() {
     let mut running_service = false;
     loop {
         if election.am_i_leader() {
-            println!("leader");
+            debug!("leader");
             if !running_service {
                 running_service = true;
                 task_manager_handler = Some(thread::spawn(move || task_management_clone.run()));
                 task_management_clone = task_management.clone()
             }
         } else {
-            println!("not leader");
             if let Some(leader_id) = election.get_leader_id() {
-                
+                debug!("Not leader");
                 if !is_leader_alive(leader_id, sockets_lock_clone, got_pong_clone) {
                     election.find_new();
                 }

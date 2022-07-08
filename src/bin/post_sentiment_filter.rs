@@ -41,10 +41,11 @@ fn main() -> Result<()> {
 fn run_service(config: Config) -> Result<()> {
     info!("Getting post ids with url");
     let ids = get_posts_ids_with_url(&config)?;
-    info!("Filtering sentiments with url");
+    info!("Filtering sentiments with url, got {} ids", ids.len());
     let mut processor = PostSentimentFilter { ids };
     let consumer_transaction_log_path = config.transaction_log_path.clone().add(".subservice");
     let mut service = RabbitService::new(config, &mut processor);
+    std::thread::sleep(std::time::Duration::from_secs(1));
     service.run(
         POST_ID_SENTIMENT_QUEUE_NAME,
         Some(FILTERED_POST_ID_SENTIMENT_QUEUE_NAME.to_string()),
@@ -59,16 +60,6 @@ struct PostSentimentFilter {
 
 impl MessageProcessor for PostSentimentFilter {
     type State = HashSet<String>;
-
-    fn set_state(&mut self, state: Self::State) {
-        info!("PostSentimentFilter | retrieving state: {:?}", state.len());
-        self.ids = state;
-    }
-
-    fn get_state(&self) -> Option<Self::State> {
-        info!("PostSentimentFilter | saving state: {:?}", self.ids.len());
-        Some(self.ids.clone())
-    }
 
     fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
@@ -94,12 +85,10 @@ impl MessageProcessor for PostIdWithUrlConsumer {
     type State = HashSet<String>;
 
     fn set_state(&mut self, state: Self::State) {
-        info!("PostIdWithUrlConsumer | retrieving state: {:?}", state.len());
         self.ids = state;
     }
 
     fn get_state(&self) -> Option<Self::State> {
-        info!("PostIdWithUrlConsumer | saving state: {:?}", self.ids.len());
         Some(self.ids.clone())
     }
 
