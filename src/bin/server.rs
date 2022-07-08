@@ -35,22 +35,24 @@ pub struct Server {
     server_address: String,
     posts_producer_address: String,
     comments_producer_address: String,
+    invalid_state: bool
 }
 
 impl Server {
     pub fn new(chunk_size: u64,
                server_address: String,
                posts_producer_address: String,
-               comments_producer_address: String,) -> Self {
+               comments_producer_address: String) -> Self {
         Server{
             chunk_size,
             server_address,
             posts_producer_address,
-            comments_producer_address
+            comments_producer_address,
+            invalid_state: false
         }
     }
 
-    pub fn run(&self, config: &Config) {
+    pub fn run(&mut self, config: &Config) {
         let shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_for_signals_thread = shutdown.clone();
         let signals_thread = spawn(move || {
@@ -82,7 +84,11 @@ impl Server {
         signals_thread.join().expect("Failed to join signals thread");
     }
 
-    fn handle_client(&self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
+    fn handle_client(&mut self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
+        if self.invalid_state {
+            error!("System is in an invalid state!");
+            return Err(Error::new(ErrorKind::Other, "Server in an invalid state."));
+        }
         println!("Forwarding posts");
         let mut got_any_error = false;
         // Can safely exit if post_producer connection fails
@@ -120,10 +126,11 @@ impl Server {
                     error!("Failed to connect to comment producer: {:?}. Will retry", e);
                     tries -= 1;
                     if tries == 0 {
-                        self.answer_not_available(stream);
                         // If reached this point, something REALLY bad happened and the whole system
                         // is in an invalid state...
-                        panic!("We should never reach this point right? RIGHT!?");
+                        self.invalid_state = true;
+                        return Err(Error::new(ErrorKind::Other, "System in an invalid state."));
+                        error!("System in an invalid state. We should never reach this point right? RIGHT!?");
                     }
                     thread::sleep(Duration::from_secs(SEC_BETWEEN_RETRIES_FOR_COMMENT));
                 }
