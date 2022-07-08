@@ -343,7 +343,6 @@ struct Results {
 }
 
 fn handle_sigterm(shutdown: Arc<AtomicBool>) {
-    println!("HANDLE SIGTERM");
     let mut signals = Signals::new(&[SIGTERM]).expect("Failed to register SignalsInfo");
     for sig in signals.forever() {
         println!("RECEIVED SIGNAL {}", sig);

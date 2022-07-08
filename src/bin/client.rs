@@ -55,7 +55,6 @@ pub fn receive_results(connection:&mut TcpStream) {
             println!("Received end: {}", msg);
             break;
         }
-        println!("College post: {:?}", msg);
         college_posts.push(msg);
     }
     println!("College posts received: {:?}", college_posts.len());

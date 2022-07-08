@@ -45,6 +45,14 @@ struct PostSentimentCalculator {
 impl MessageProcessor for PostSentimentCalculator {
     type State = HashMap<String, (f32, i32)>;
 
+    fn set_state(&mut self, state: Self::State) {
+        self.post_sentiments_map = state;
+    }
+
+    fn get_state(&self) -> Option<Self::State> {
+        Some(self.post_sentiments_map.clone())
+    }
+
     fn process_message(&mut self, message: Message) -> Option<Message> {
         match message {
             Message::PostIdSentiment(post_id, sentiment) => {
@@ -60,6 +68,7 @@ impl MessageProcessor for PostSentimentCalculator {
     }
 
     fn on_stream_finished(&self) -> Option<Message> {
+        info!("Stream finished, {} sentiments", self.post_sentiments_map.len());
         let post_sentiment = get_highest_post_sentiment(&self.post_sentiments_map);
         info!("Sending highest post sentiment {:?}", post_sentiment);
         Some(Message::PostIdSentiment(post_sentiment.0, post_sentiment.1))

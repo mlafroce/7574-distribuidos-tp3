@@ -85,7 +85,7 @@ fn main() {
     let mut running_service = false;
     loop {
         if election.am_i_leader() {
-            println!("leader");
+            debug!("leader");
             if !running_service {
                 running_service = true;
                 shutdown_task_management.store(false, Ordering::Relaxed);
