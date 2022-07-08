@@ -37,13 +37,14 @@ impl TransactionLog {
         self.log.rewind()?;
         // TODO: load last lines, not the whole log!
         let reader = BufReader::new(&self.log);
-        let lines = reader.lines().flatten().collect::<Vec<_>>();
-        let last_processed =  lines.into_iter()
-            .rev()
+        let last_processed = reader
+            .lines()
+            .flatten()
             .flat_map(|s| {
                 serde_json::from_str::<Checkpoint<S>>(&s)
             })
-            .find(|c| matches!(c, Checkpoint::Processed{state: _}));
+            .filter(|c| matches!(c, Checkpoint::Processed{state: _}))
+            .last();
         if let Some(Checkpoint::Processed {state}) = last_processed {
             Ok(state)
         } else {
@@ -56,10 +57,16 @@ impl TransactionLog {
     ) -> io::Result<Checkpoint<S>> {
         self.log.rewind()?;
         let reader = BufReader::new(&self.log);
-        let lines = reader.lines().flatten().collect::<Vec<_>>();
+        /*let lines = reader.lines().flatten().collect::<Vec<_>>();
         let last_checkpoint =  lines.into_iter().rev().flat_map(|s| {
             serde_json::from_str::<Checkpoint<S>>(&s)
-        }).next();
+        }).next();*/
+        let last_checkpoint = reader
+            .lines()
+            .flatten()
+            .flat_map(|s| {
+                serde_json::from_str::<Checkpoint<S>>(&s)
+            }).last();
         if let Some(checkpoint) = last_checkpoint {
             Ok(checkpoint)
         } else {
