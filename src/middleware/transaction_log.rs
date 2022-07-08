@@ -6,13 +6,14 @@ use std::io;
 use std::io::{BufReader, BufRead, Seek, Write};
 use serde::de::DeserializeOwned;
 use serde_json;
+use crate::messages::BulkBuilder;
 
 const MAX_CHECKPOINTS: usize = 20;
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum Checkpoint<S> where S: std::clone::Clone {
     Clean,
-    Processed { state: S },
+    Processed { state: S, output: BulkBuilder },
     Sent,
     Confirmed,
     EndOfStream,
@@ -36,7 +37,7 @@ impl TransactionLog {
 
     pub fn load_state<S: DeserializeOwned + std::fmt::Debug + std::clone::Clone + std::default::Default>(
         &mut self,
-    ) -> io::Result<S> {
+    ) -> io::Result<(S, BulkBuilder)> {
         let mut text = String::new();
         self.log.rewind()?;
         // TODO: load last lines, not the whole log!
@@ -46,12 +47,12 @@ impl TransactionLog {
             .flat_map(|s| {
                 serde_json::from_str::<Checkpoint<S>>(&s)
             })
-            .filter(|c| matches!(c, Checkpoint::Processed{state: _}))
+            .filter(|c| matches!(c, Checkpoint::Processed{state: _, output: _}))
             .last();
-        if let Some(Checkpoint::Processed {state}) = last_processed {
-            Ok(state)
+        if let Some(Checkpoint::Processed {state, output}) = last_processed {
+            Ok((state, output))
         } else {
-            Ok(S::default())
+            Ok((S::default(), BulkBuilder::default()))
         }
     }
 
@@ -76,8 +77,9 @@ impl TransactionLog {
         std::fs::remove_file(&self.path)
     }
 
-    pub fn save_state<S:Serialize + std::clone::Clone>(&mut self, state: S) -> io::Result<()> {
-        let checkpoint = Checkpoint::Processed {state};
+    pub fn save_state<S:Serialize + std::clone::Clone>(&mut self, state: S, bulk: &BulkBuilder) -> io::Result<()> {
+
+        let checkpoint = Checkpoint::Processed {state, output: bulk.clone()};
         self.save_checkpoint(checkpoint)
     }
 

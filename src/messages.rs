@@ -39,7 +39,7 @@ pub enum Message {
     Confirmed
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BulkBuilder {
     data_buf: Vec<u8>,
     data_sizes: Vec<usize>,

@@ -95,7 +95,7 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
     fn _run(&mut self, channel: &Channel, buf_consumer: BufConsumer, mut exchange: BinaryExchange, run_once: bool) -> Result<()> {
         let mut stream_finished = run_once;
         info!("Loading state");
-        let state = self.transaction_log.load_state::<M::State>().unwrap_or_default();
+        let (state, prev_output) = self.transaction_log.load_state::<M::State>().unwrap_or_default();
         self.message_processor.set_state(state);
         let mut checkpoint = self.transaction_log.load_checkpoint::<M::State>().unwrap_or(Checkpoint::Clean);
         if matches!(checkpoint, Checkpoint::ServiceFinished) {
@@ -129,8 +129,11 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
                     }
                 }
                 if let Some(state) = self.message_processor.get_state() {
-                    self.transaction_log.save_state(state).unwrap(); //writeTransactionLog(State, "processed")
+                    self.transaction_log.save_state(state, &bulk_builder).unwrap(); //writeTransactionLog(State, "processed")
                 }
+            }
+            if matches!(checkpoint, Checkpoint::Processed{state: _, output: _} ) {
+                bulk_builder = prev_output.clone();
             }
             if bulk_builder.size() > 0 && !matches!(checkpoint, Checkpoint::Confirmed) {
                 let output = bulk_builder.build();
