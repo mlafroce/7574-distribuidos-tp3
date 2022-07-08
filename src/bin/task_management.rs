@@ -26,26 +26,9 @@ fn main() {
     let services = reader.lines()
         .map(|l| l.expect("Could not parse line"))
         .collect();
-    let shutdown_task_management = Arc::new(AtomicBool::new(false));
-    let task_management = TaskManagement::new(services, config.service_port, config.timeout_sec, config.sec_between_requests, shutdown_task_management.clone());
-    let mut task_management_clone = task_management.clone();
 
-    // begin leader election
     let shutdown = Arc::new(AtomicBool::new(false));
-    let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
-    let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
-    let input: Vector<(usize, u8)> = Vector::new();
-    let output: Vector<(usize, (usize, u8))> = Vector::new();
-    let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
-    let mut election = LeaderElection::new(process_id, output.clone(), N_MEMBERS);
-
     let mut shutdown_clone = shutdown.clone();
-    let mut got_pong_clone = got_pong.clone();
-    let mut sockets_lock_clone = sockets_lock.clone();
-    let mut input_clone = input.clone();
-    let mut output_clone = output.clone();
-    let election_clone = election.clone();
-
 
     // handle sigterm
     let signals_handler = thread::spawn(move || handle_sigterm(shutdown_clone));
@@ -55,6 +38,25 @@ fn main() {
     let health_answerer = HealthAnswerer::new("0.0.0.0:6789", shutdown.clone());
     let mut health_answerer_handler = HealthAnswerHandler::new(shutdown.clone());
     let health_answerer_thread = thread::spawn(move || {health_answerer.run(&mut health_answerer_handler)});
+
+   // Task Management
+    let shutdown_task_management = Arc::new(AtomicBool::new(false));
+    let task_management = TaskManagement::new(services, config.service_port, config.timeout_sec, config.sec_between_requests, shutdown_task_management.clone());
+    let mut task_management_clone = task_management.clone();
+
+    // begin leader election
+    let process_id = env::var("PROCESS_ID").unwrap().parse::<usize>().unwrap();
+    let got_pong = Arc::new((Mutex::new(false), Condvar::new()));
+    let input: Vector<(usize, u8)> = Vector::new();
+    let output: Vector<(usize, (usize, u8))> = Vector::new();
+    let sockets_lock = Arc::new(RwLock::new(HashMap::new()));
+    let mut election = LeaderElection::new(process_id, output.clone(), N_MEMBERS);
+
+    let mut got_pong_clone = got_pong.clone();
+    let mut sockets_lock_clone = sockets_lock.clone();
+    let mut input_clone = input.clone();
+    let mut output_clone = output.clone();
+    let election_clone = election.clone();
 
     // listen members - receive msgs from them and deposit into input queue
     let tcp_listener = thread::spawn(move || tcp_listen(process_id, input_clone, sockets_lock_clone, got_pong_clone, shutdown_clone));
