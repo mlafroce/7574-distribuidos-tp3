@@ -1,0 +1,10 @@
+docker kill mean_calculator
+docker kill url_extractor
+docker kill post_sentiment_calculator
+docker kill post_college_filter
+docker kill post_sentiment_filter
+docker kill score_extractor
+docker kill comment_sentiment_extractor
+docker kill best_meme_filter
+docker kill post_average_filter
+docker kill comment_college_filter
