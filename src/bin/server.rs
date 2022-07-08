@@ -10,7 +10,6 @@ use tp2::middleware::consumer::DeliveryConsumer;
 use tp2::messages::Message;
 use log::{debug, error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::spawn;
 use std::time::Duration;
 use envconfig::Envconfig;
 use signal_hook::consts::SIGTERM;
@@ -54,10 +53,7 @@ impl Server {
 
     pub fn run(&mut self, config: &Config) {
         let shutdown = Arc::new(AtomicBool::new(false));
-        let shutdown_for_signals_thread = shutdown.clone();
-        let signals_thread = spawn(move || {
-            handle_sigterm(shutdown_for_signals_thread.clone());
-        });
+        signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&shutdown.clone())).unwrap();
 
         let listener = TcpListener::bind(self.server_address.clone()).expect(&*format!("Could not bind to address: {}", self.server_address));
         listener.set_nonblocking(true).expect("Could not set non blocking to true");
@@ -81,7 +77,6 @@ impl Server {
                 break;
             }
         }
-        signals_thread.join().expect("Failed to join signals thread");
     }
 
     fn handle_client(&mut self, stream: &mut TcpStream, config: &Config) -> io::Result<()> {
@@ -316,16 +311,4 @@ struct Results {
     best_meme: String,
     score_mean: f32,
     college_posts: Vec<String>,
-}
-
-fn handle_sigterm(shutdown: Arc<AtomicBool>) {
-    let mut signals = Signals::new(&[SIGTERM]).expect("Failed to register SignalsInfo");
-    for sig in signals.forever() {
-        println!("RECEIVED SIGNAL {}", sig);
-        if sig == SIGTERM {
-            println!("ENTERED IF {}", sig);
-            shutdown.store(true, Ordering::Relaxed);
-            break;
-        }
-    }
 }

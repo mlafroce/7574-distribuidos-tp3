@@ -48,10 +48,10 @@ fn run_service(config: Config) -> Result<()> {
             POST_COLLEGE_QUEUE_NAME,
             Some(POST_URL_AVERAGE_QUEUE_NAME.to_string()),
         )?;
-        std::fs::remove_file(&consumer_transaction_log_path);
     } else {
         warn!("Couldn't pop score average");
     }
+    std::fs::remove_file(&consumer_transaction_log_path);
     Ok(())
 }
 

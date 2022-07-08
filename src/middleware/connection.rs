@@ -55,7 +55,6 @@ impl RabbitConnection {
     }
 
     pub fn close(self) -> Result<()> {
-        self.channel.close()?;
         self.connection.close()
     }
 }
@@ -106,32 +105,9 @@ impl RabbitExchange for BinaryExchange<'_> {
         self.exchange.publish(Publish::new(&body, key))
     }
 
-    /// Call when an end of stream arrives. If no producers are left, notify consumers about EOS
-    /// Returns true if finished, false otherwise
     fn end_of_stream(&mut self) -> Result<bool> {
-        info!(
-            "Called end_of_stream with {} producers, {} consumers",
-            self.producers, self.consumers
-        );
-        match self.finished_producers.cmp(&(self.producers - 1)) {
-            Ordering::Less => {
-                self.finished_producers += 1;
-                Ok(false)
-            }
-            Ordering::Equal => {
-                self.finished_producers += 1;
-                //info!("Sending {} EOS", self.consumers);
-                info!("Producer finished");
-                for _ in 0..self.consumers {
-                    self.send(&self.eos_message.clone())?;
-                    self.send(&Message::Confirmed)?;
-                }
-                Ok(true)
-            }
-            Ordering::Greater => {
-                error!("Received extra End Of stream");
-                Ok(true)
-            }
-        }
+        self.send(&self.eos_message.clone())?;
+        self.send(&Message::Confirmed)?;
+        Ok(true)
     }
 }

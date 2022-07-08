@@ -70,8 +70,9 @@ impl<'a, M: MessageProcessor> RabbitService<'a, M> {
         let exchange = BinaryExchange::new(exchange, output_key, 1, 1);
 
         self._run(channel, buf_consumer, exchange, false)?;
-        info!("Exit");
+        info!("Closing connection");
         connection.close()?;
+        info!("Exit");
         Ok(())
     }
 
