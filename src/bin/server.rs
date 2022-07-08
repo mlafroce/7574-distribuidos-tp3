@@ -23,7 +23,7 @@ fn main() {
     std::env::set_var("RUST_LOG", env_config.logging_level.clone());
     env_logger::init();
     let config = ServerConfig::init_from_env().expect("Failed to read env configuration");
-    let server = Server::new(config.chunk_size, config.server_address, config.posts_producer_address, config.comments_producer_address);
+    let mut server = Server::new(config.chunk_size, config.server_address, config.posts_producer_address, config.comments_producer_address);
     server.run(&env_config);
 }
 
