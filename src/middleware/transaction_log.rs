@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{Read, Seek, Write};
+use std::io::{BufReader, BufRead, Seek, Write};
 use serde::de::DeserializeOwned;
 use serde_json;
 
@@ -36,12 +36,12 @@ impl TransactionLog {
         let mut text = String::new();
         self.log.rewind()?;
         // TODO: load last lines, not the whole log!
-        self.log.read_to_string(&mut text)?;
-        let lines = text.lines();
-        let last_processed =  lines
+        let reader = BufReader::new(&self.log);
+        let lines = reader.lines().flatten().collect::<Vec<_>>();
+        let last_processed =  lines.into_iter()
             .rev()
             .flat_map(|s| {
-                serde_json::from_str::<Checkpoint<S>>(s)
+                serde_json::from_str::<Checkpoint<S>>(&s)
             })
             .find(|c| matches!(c, Checkpoint::Processed{state: _}));
         if let Some(Checkpoint::Processed {state}) = last_processed {
@@ -54,11 +54,11 @@ impl TransactionLog {
     pub fn load_checkpoint<S: DeserializeOwned + std::clone::Clone>(
         &mut self,
     ) -> io::Result<Checkpoint<S>> {
-        let mut text = String::new();
-        self.log.read_to_string(&mut text)?;
-        let lines = text.lines();
-        let last_checkpoint =  lines.rev().flat_map(|s| {
-            serde_json::from_str::<Checkpoint<S>>(s)
+        self.log.rewind()?;
+        let reader = BufReader::new(&self.log);
+        let lines = reader.lines().flatten().collect::<Vec<_>>();
+        let last_checkpoint =  lines.into_iter().rev().flat_map(|s| {
+            serde_json::from_str::<Checkpoint<S>>(&s)
         }).next();
         if let Some(checkpoint) = last_checkpoint {
             Ok(checkpoint)
